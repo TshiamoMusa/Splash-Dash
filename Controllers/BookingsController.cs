@@ -1,7 +1,10 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SplashDash.Api.Data;
 using SplashDash.Api.Models;
+using System.Security.Claims;
 
 namespace SplashDash.Api.Controllers;
 
@@ -16,128 +19,20 @@ public class BookingsController : ControllerBase
         _context = context;
     }
 
-    [HttpGet("{customerId:int}")]
-    public async Task<IActionResult> GetCustomerBookings(int customerId)
+    // Customers can view only their own bookings.
+    [Authorize(Roles = "Customer")]
+    [HttpGet("my-bookings")]
+    public async Task<IActionResult> GetCustomerBookings()
     {
-        if (customerId <= 0)
+        if (!int.TryParse(
+            User.FindFirstValue(ClaimTypes.NameIdentifier),
+            out int userId))
         {
-            return BadRequest(new
-            {
-                message = "Invalid customer."
-            });
-        }
-
-        var bookings = await _context.Bookings
-            .Where(b => b.CustomerId == customerId)
-            .OrderByDescending(b => b.BookingDate)
-            .Select(b => new
-            {
-                b.Id,
-                b.VehicleMake,
-                b.VehicleModel,
-                b.VehicleRegistration,
-                b.VehicleType,
-                b.ServiceType,
-                b.BookingDate,
-                b.Status,
-                b.Price
-            })
-            .ToListAsync();
-
-        return Ok(bookings);
-    }
-    [HttpGet("all")]
-    public async Task<IActionResult> GetAllBookings()
-    {
-        var bookings = await _context.Bookings
-            .Include(b => b.Customer)
-            .OrderBy(b => b.BookingDate)
-            .Select(b => new
-            {
-                b.Id,
-                b.CustomerId,
-                CustomerName = b.Customer!.FullName,
-                b.VehicleMake,
-                b.VehicleModel,
-                b.VehicleRegistration,
-                b.VehicleType,
-                b.ServiceType,
-                b.BookingDate,
-                b.Status,
-                b.Price
-            })
-            .ToListAsync();
-
-        return Ok(bookings);
-    }
-
-    [HttpPut("{id:int}/status")]
-    public async Task<IActionResult> UpdateBookingStatus(
-        int id,
-        UpdateBookingStatusRequest request)
-    {
-        var booking = await _context.Bookings
-            .FirstOrDefaultAsync(b => b.Id == id);
-
-        if (booking == null)
-        {
-            return NotFound(new
-            {
-                message = "Booking not found."
-            });
-        }
-
-        var allowedStatuses = new[]
-        {
-            "Pending",
-            "In Progress",
-            "Completed"
-        };
-
-        if (!allowedStatuses.Contains(request.Status))
-        {
-            return BadRequest(new
-            {
-                message = "Invalid booking status."
-            });
-        }
-
-        booking.Status = request.Status;
-
-        await _context.SaveChangesAsync();
-
-        return Ok(new
-        {
-            message = "Booking status updated successfully.",
-            booking.Id,
-            booking.Status
-        });
-    }
-    [HttpPost]
-    public async Task<IActionResult> CreateBooking(
-        CreateBookingRequest request)
-    {
-        if (request.CustomerId <= 0)
-        {
-            return BadRequest(new
-            {
-                message = "Invalid customer."
-            });
-        }
-
-        if (string.IsNullOrWhiteSpace(request.VehicleMake) ||
-            string.IsNullOrWhiteSpace(request.VehicleModel) ||
-            string.IsNullOrWhiteSpace(request.VehicleRegistration) ||
-            string.IsNullOrWhiteSpace(request.VehicleType))
-        {
-            return BadRequest(new
-            {
-                message = "Please complete all vehicle information."
-            });
+            return Unauthorized();
         }
 
         var customer = await _context.Customers
-            .FirstOrDefaultAsync(c => c.Id == request.CustomerId);
+            .FirstOrDefaultAsync(c => c.UserId == userId);
 
         if (customer == null)
         {
@@ -147,25 +42,131 @@ public class BookingsController : ControllerBase
             });
         }
 
-        string service = request.ServiceType.Trim();
+        var bookings = await _context.Bookings
+            .Where(b => b.CustomerId == customer.CustomerId)
+            .Include(b => b.Service)
+            .OrderByDescending(b => b.BookingDateTime)
+            .Select(b => new
+            {
+                b.BookingId,
+                b.VehicleType,
+                Service = b.Service!.ServiceName,
+                b.BookingDateTime,
+                b.LocationType,
+                b.BookingAddress,
+                b.BookingStatus,
+                b.TotalAmount
+            })
+            .ToListAsync();
 
-        decimal price = service switch
+        return Ok(bookings);
+    }
+
+    // Staff and Admin can view the shared booking queue.
+    [Authorize(Roles = "Staff,Admin")]
+    [HttpGet("all")]
+    public async Task<IActionResult> GetAllBookings()
+    {
+        var bookings = await _context.Bookings
+            .Include(b => b.Customer)
+                .ThenInclude(c => c!.User)
+            .Include(b => b.Service)
+            .Include(b => b.Staff)
+                .ThenInclude(s => s!.User)
+            .OrderBy(b => b.BookingDateTime)
+            .Select(b => new
+            {
+                b.BookingId,
+                b.CustomerId,
+                CustomerName = b.Customer!.User!.FirstName
+                    + " " + b.Customer.User.Surname,
+                CustomerPhone = b.Customer.User.PhoneNumber,
+                b.VehicleType,
+                Service = b.Service!.ServiceName,
+                b.BookingDateTime,
+                b.LocationType,
+                b.BookingAddress,
+                b.BookingStatus,
+                b.TotalAmount,
+                b.StaffId,
+                StaffName = b.Staff == null
+                    ? null
+                    : b.Staff.User!.FirstName + " " + b.Staff.User.Surname
+            })
+            .ToListAsync();
+
+        return Ok(bookings);
+    }
+
+    // Customer creates a booking.
+    [Authorize(Roles = "Customer")]
+    [HttpPost]
+    public async Task<IActionResult> CreateBooking(
+        CreateBookingRequest request)
+    {
+        if (!int.TryParse(
+            User.FindFirstValue(ClaimTypes.NameIdentifier),
+            out int userId))
         {
-            "Exterior Wash" => 400m,
-            "Interior Cleaning" => 500m,
-            "Full Detail Package" => 800m,
-            _ => 0m
-        };
+            return Unauthorized();
+        }
 
-        if (price == 0)
+        if (string.IsNullOrWhiteSpace(request.VehicleType) ||
+            string.IsNullOrWhiteSpace(request.LocationType) ||
+            request.ServiceId <= 0)
         {
             return BadRequest(new
             {
-                message = "Please select a valid car wash service."
+                message = "Please complete all booking details."
             });
         }
 
-        if (request.BookingDate <= DateTime.UtcNow)
+        string[] allowedVehicles =
+        {
+            "Small Car", "Large Car", "SUV", "Bakkie"
+        };
+
+        if (!allowedVehicles.Contains(request.VehicleType))
+        {
+            return BadRequest(new
+            {
+                message = "Invalid vehicle type."
+            });
+        }
+
+        if (request.LocationType != "On-site" &&
+            request.LocationType != "House Call")
+        {
+            return BadRequest(new
+            {
+                message = "Invalid booking location."
+            });
+        }
+
+        var customer = await _context.Customers
+            .FirstOrDefaultAsync(c => c.UserId == userId);
+
+        if (customer == null)
+        {
+            return NotFound(new
+            {
+                message = "Customer account not found."
+            });
+        }
+
+        var service = await _context.Services
+            .FirstOrDefaultAsync(s =>
+                s.ServiceId == request.ServiceId && s.IsActive);
+
+        if (service == null || service.Price <= 0)
+        {
+            return BadRequest(new
+            {
+                message = "Selected service is unavailable."
+            });
+        }
+
+        if (request.BookingDateTime <= DateTimeOffset.UtcNow)
         {
             return BadRequest(new
             {
@@ -173,19 +174,33 @@ public class BookingsController : ControllerBase
             });
         }
 
+        string? bookingAddress = null;
+
+        if (request.LocationType == "House Call")
+        {
+            bookingAddress = string.IsNullOrWhiteSpace(request.BookingAddress)
+                ? customer.HomeAddress
+                : request.BookingAddress.Trim();
+
+            if (string.IsNullOrWhiteSpace(bookingAddress))
+            {
+                return BadRequest(new
+                {
+                    message = "A house-call address is required."
+                });
+            }
+        }
+
         var booking = new Booking
         {
-            CustomerId = customer.Id,
-            VehicleMake = request.VehicleMake.Trim(),
-            VehicleModel = request.VehicleModel.Trim(),
-            VehicleRegistration =
-                request.VehicleRegistration.Trim().ToUpperInvariant(),
-            VehicleType = request.VehicleType.Trim(),
-            ServiceType = service,
-            BookingDate = request.BookingDate,
-            Status = "Pending",
-            Price = price,
-            CreatedAt = DateTime.UtcNow
+            CustomerId = customer.CustomerId,
+            ServiceId = service.ServiceId,
+            VehicleType = request.VehicleType,
+            BookingDateTime = request.BookingDateTime,
+            LocationType = request.LocationType,
+            BookingAddress = bookingAddress,
+            BookingStatus = "Pending",
+            TotalAmount = service.Price
         };
 
         _context.Bookings.Add(booking);
@@ -197,43 +212,82 @@ public class BookingsController : ControllerBase
             message = "Your booking was created successfully.",
             booking = new
             {
-                booking.Id,
+                booking.BookingId,
                 booking.CustomerId,
-                booking.VehicleMake,
-                booking.VehicleModel,
-                booking.VehicleRegistration,
+                booking.ServiceId,
+                service.ServiceName,
                 booking.VehicleType,
-                booking.ServiceType,
-                booking.BookingDate,
-                booking.Status,
-                booking.Price
+                booking.BookingDateTime,
+                booking.LocationType,
+                booking.BookingAddress,
+                booking.BookingStatus,
+                booking.TotalAmount
             }
+        });
+    }
+
+    // Staff and Admin can update booking status.
+    [Authorize(Roles = "Staff,Admin")]
+    [HttpPut("{id:int}/status")]
+    public async Task<IActionResult> UpdateBookingStatus(
+        int id,
+        UpdateBookingStatusRequest request)
+    {
+        var booking = await _context.Bookings
+            .FirstOrDefaultAsync(b => b.BookingId == id);
+
+        if (booking == null)
+        {
+            return NotFound(new
+            {
+                message = "Booking not found."
+            });
+        }
+
+        string[] allowedStatuses =
+        {
+            "Pending",
+            "Confirmed",
+            "In Progress",
+            "Completed",
+            "Cancelled"
+        };
+
+        if (!allowedStatuses.Contains(request.Status))
+        {
+            return BadRequest(new
+            {
+                message = "Invalid booking status."
+            });
+        }
+
+        booking.BookingStatus = request.Status;
+
+        await _context.SaveChangesAsync();
+
+        return Ok(new
+        {
+            message = "Booking status updated successfully.",
+            booking.BookingId,
+            booking.BookingStatus
         });
     }
 }
 
 public class CreateBookingRequest
 {
-    public int CustomerId { get; set; }
-
-    public string VehicleMake { get; set; } = string.Empty;
-
-    public string VehicleModel { get; set; } = string.Empty;
-
-    public string VehicleRegistration { get; set; } = string.Empty;
+    public int ServiceId { get; set; }
 
     public string VehicleType { get; set; } = string.Empty;
 
-    public string ServiceType { get; set; } = string.Empty;
+    public DateTimeOffset BookingDateTime { get; set; }
 
-    public DateTime BookingDate { get; set; }
+    public string LocationType { get; set; } = string.Empty;
+
+    public string? BookingAddress { get; set; }
 }
-
-
-
 
 public class UpdateBookingStatusRequest
 {
     public string Status { get; set; } = string.Empty;
 }
-

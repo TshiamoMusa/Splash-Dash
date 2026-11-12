@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Authorization;
+﻿
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -7,6 +8,7 @@ using SplashDash.Api.Data;
 using SplashDash.Api.Models;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text;
 
 namespace SplashDash.Api.Controllers;
@@ -17,17 +19,21 @@ public class AuthController : ControllerBase
 {
     private readonly AppDbContext _context;
     private readonly IConfiguration _configuration;
-    private readonly PasswordHasher<Customer> _customerHasher = new();
-    private readonly PasswordHasher<StaffAccount> _staffHasher = new();
+    private readonly IWebHostEnvironment _environment;
+    private readonly PasswordHasher<User> _passwordHasher = new();
 
     public AuthController(
         AppDbContext context,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        IWebHostEnvironment environment)
     {
         _context = context;
         _configuration = configuration;
+        _environment = environment;
     }
 
+    // Login for Customers, Staff and Admins.
+    [AllowAnonymous]
     [HttpPost("login")]
     public async Task<IActionResult> Login(LoginRequest request)
     {
@@ -40,84 +46,75 @@ public class AuthController : ControllerBase
             });
         }
 
-        string identifier = request.Identifier.Trim();
-        string normalized = identifier.ToLowerInvariant();
+        string identifier = request.Identifier.Trim().ToLowerInvariant();
 
-        // A staff username is checked first so staff can sign in
-        // even if their email is also used by a customer account.
-        var staffByUsername = await _context.StaffAccounts
-            .FirstOrDefaultAsync(s =>
-                s.Username.ToLower() == normalized);
+        var account = await _context.Users.FirstOrDefaultAsync(u =>
+            u.Email.ToLower() == identifier ||
+            (u.AccountType != "Customer" &&
+             u.Username != null &&
+             u.Username.ToLower() == identifier));
 
-        if (staffByUsername != null)
+        if (account == null || !account.IsActive ||
+            string.IsNullOrWhiteSpace(account.PasswordHash))
         {
-            return AuthenticateStaff(staffByUsername, request.Password);
-        }
-
-        // Customers sign in using their registered email.
-        var customer = await _context.Customers
-            .FirstOrDefaultAsync(c =>
-                c.Email.ToLower() == normalized);
-
-        if (customer != null)
-        {
-            var result = _customerHasher.VerifyHashedPassword(
-                customer,
-                customer.PasswordHash,
-                request.Password);
-
-            if (result == PasswordVerificationResult.Failed)
+            return Unauthorized(new
             {
-                return Unauthorized(new
-                {
-                    message = "Invalid username/email or password."
-                });
-            }
-
-            return Ok(CreateLoginResponse(
-                customer.Id,
-                customer.FullName,
-                customer.Email,
-                "Customer",
-                false));
+                message = "Invalid username/email or password."
+            });
         }
 
-        // Staff and Admin can also use their email address.
-        var staffByEmail = await _context.StaffAccounts
-            .FirstOrDefaultAsync(s =>
-                s.Email.ToLower() == normalized);
+        var result = _passwordHasher.VerifyHashedPassword(
+            account,
+            account.PasswordHash,
+            request.Password);
 
-        if (staffByEmail != null)
+        if (result == PasswordVerificationResult.Failed)
         {
-            return AuthenticateStaff(staffByEmail, request.Password);
+            return Unauthorized(new
+            {
+                message = "Invalid username/email or password."
+            });
         }
 
-        return Unauthorized(new
+        // Confirm that the account has the correct profile.
+        bool profileExists = account.AccountType switch
         {
-            message = "Invalid username/email or password."
-        });
+            "Admin" => await _context.Admins.AnyAsync(
+                a => a.UserId == account.UserId),
+
+            "Staff" => await _context.Staff.AnyAsync(
+                s => s.UserId == account.UserId),
+
+            "Customer" => await _context.Customers.AnyAsync(
+                c => c.UserId == account.UserId),
+
+            _ => false
+        };
+
+        if (!profileExists)
+        {
+            return Unauthorized(new
+            {
+                message = "Account profile could not be verified."
+            });
+        }
+
+        return Ok(CreateLoginResponse(account));
     }
 
-
+    // Creates the first Admin account during local development.
     [AllowAnonymous]
     [HttpPost("bootstrap-admin")]
     public async Task<IActionResult> BootstrapAdmin(
         BootstrapAdminRequest request)
     {
-        // Initial account creation is deliberately restricted
-        // to the local Development environment.
-        if (!HttpContext.RequestServices
-            .GetRequiredService<IWebHostEnvironment>()
-            .IsDevelopment())
+        if (!_environment.IsDevelopment())
         {
             return NotFound();
         }
 
-        string? configuredKey =
-            _configuration["Bootstrap:AdminKey"];
-
-        string? suppliedKey =
-            Request.Headers["X-Bootstrap-Key"].FirstOrDefault();
+        string? configuredKey = _configuration["Bootstrap:AdminKey"];
+        string? suppliedKey = Request.Headers["X-Bootstrap-Key"].FirstOrDefault();
 
         if (string.IsNullOrWhiteSpace(configuredKey) ||
             string.IsNullOrWhiteSpace(suppliedKey))
@@ -128,11 +125,9 @@ public class AuthController : ControllerBase
             });
         }
 
-        bool validKey =
-            System.Security.Cryptography.CryptographicOperations
-                .FixedTimeEquals(
-                    Encoding.UTF8.GetBytes(configuredKey),
-                    Encoding.UTF8.GetBytes(suppliedKey));
+        bool validKey = CryptographicOperations.FixedTimeEquals(
+            Encoding.UTF8.GetBytes(configuredKey),
+            Encoding.UTF8.GetBytes(suppliedKey));
 
         if (!validKey)
         {
@@ -142,11 +137,12 @@ public class AuthController : ControllerBase
             });
         }
 
-        if (string.IsNullOrWhiteSpace(request.FullName) ||
+        if (string.IsNullOrWhiteSpace(request.FirstName) ||
+            string.IsNullOrWhiteSpace(request.Surname) ||
             string.IsNullOrWhiteSpace(request.Email) ||
-            string.IsNullOrWhiteSpace(request.ContactNumber) ||
+            string.IsNullOrWhiteSpace(request.PhoneNumber) ||
             string.IsNullOrWhiteSpace(request.Username) ||
-            string.IsNullOrWhiteSpace(request.TemporaryPassword))
+            string.IsNullOrWhiteSpace(request.Password))
         {
             return BadRequest(new
             {
@@ -154,35 +150,27 @@ public class AuthController : ControllerBase
             });
         }
 
-        if (request.TemporaryPassword.Length < 12)
+        if (request.Password.Length < 12)
         {
             return BadRequest(new
             {
-                message = "Temporary password must contain at least 12 characters."
+                message = "Password must contain at least 12 characters."
             });
         }
 
-        bool adminExists = await _context.StaffAccounts
-            .AnyAsync(s => s.Role == "Admin");
-
-        if (adminExists)
+        if (await _context.Admins.AnyAsync())
         {
             return Conflict(new
             {
-                message = "An Admin account already exists. Bootstrap is disabled."
+                message = "An Admin account already exists."
             });
         }
 
         string email = request.Email.Trim().ToLowerInvariant();
         string username = request.Username.Trim();
 
-        bool emailExists =
-            await _context.StaffAccounts.AnyAsync(
-                s => s.Email.ToLower() == email) ||
-            await _context.Customers.AnyAsync(
-                c => c.Email.ToLower() == email);
-
-        if (emailExists)
+        if (await _context.Users.AnyAsync(u =>
+            u.Email.ToLower() == email))
         {
             return Conflict(new
             {
@@ -190,10 +178,9 @@ public class AuthController : ControllerBase
             });
         }
 
-        bool usernameExists = await _context.StaffAccounts
-            .AnyAsync(s => s.Username.ToLower() == username.ToLower());
-
-        if (usernameExists)
+        if (await _context.Users.AnyAsync(u =>
+            u.Username != null &&
+            u.Username.ToLower() == username.ToLower()))
         {
             return Conflict(new
             {
@@ -201,39 +188,47 @@ public class AuthController : ControllerBase
             });
         }
 
-        var admin = new StaffAccount
+        var adminUser = new User
         {
-            FullName = request.FullName.Trim(),
+            FirstName = request.FirstName.Trim(),
+            Surname = request.Surname.Trim(),
             Email = email,
-            ContactNumber = request.ContactNumber.Trim(),
+            PhoneNumber = request.PhoneNumber.Trim(),
             Username = username,
-            Role = "Admin",
+            AccountType = "Admin",
             IsActive = true,
-            MustChangePassword = true,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTimeOffset.UtcNow
         };
 
-        admin.PasswordHash = _staffHasher.HashPassword(
-            admin,
-            request.TemporaryPassword);
+        adminUser.PasswordHash = _passwordHasher.HashPassword(
+            adminUser,
+            request.Password);
 
-        _context.StaffAccounts.Add(admin);
+        _context.Users.Add(adminUser);
+
+        _context.Admins.Add(new Admin
+        {
+            User = adminUser
+        });
+
         await _context.SaveChangesAsync();
 
         return Ok(new
         {
-            message = "Initial Admin account created. Sign in and change the temporary password.",
+            message = "Initial Admin account created successfully.",
             account = new
             {
-                admin.Id,
-                admin.FullName,
-                admin.Email,
-                admin.Username,
-                admin.Role,
-                admin.MustChangePassword
+                id = adminUser.UserId,
+                adminUser.FirstName,
+                adminUser.Surname,
+                adminUser.Email,
+                adminUser.Username,
+                role = adminUser.AccountType
             }
         });
     }
+
+    // Changes the password of an authenticated Staff or Admin account.
     [Authorize(Roles = "Staff,Admin")]
     [HttpPost("change-password")]
     public async Task<IActionResult> ChangePassword(
@@ -244,7 +239,7 @@ public class AuthController : ControllerBase
         {
             return BadRequest(new
             {
-                message = "Current password and new password are required."
+                message = "Both passwords are required."
             });
         }
 
@@ -260,38 +255,30 @@ public class AuthController : ControllerBase
         {
             return BadRequest(new
             {
-                message = "Your new password must be different from your current password."
+                message = "Your new password must be different."
             });
         }
 
         string? idValue = User.FindFirstValue(
             ClaimTypes.NameIdentifier);
 
-        string? role = User.FindFirstValue(ClaimTypes.Role);
-
-        if (!int.TryParse(idValue, out int accountId) ||
-            (role != "Staff" && role != "Admin"))
+        if (!int.TryParse(idValue, out int userId))
         {
-            return Unauthorized(new
-            {
-                message = "Invalid account authentication."
-            });
+            return Unauthorized();
         }
 
-        var staff = await _context.StaffAccounts
-            .FirstOrDefaultAsync(s => s.Id == accountId);
+        var account = await _context.Users.FirstOrDefaultAsync(
+            u => u.UserId == userId);
 
-        if (staff == null || !staff.IsActive || staff.Role != role)
+        if (account == null || !account.IsActive ||
+            account.AccountType != User.FindFirstValue(ClaimTypes.Role))
         {
-            return Unauthorized(new
-            {
-                message = "Staff account could not be verified."
-            });
+            return Unauthorized();
         }
 
-        var verification = _staffHasher.VerifyHashedPassword(
-            staff,
-            staff.PasswordHash,
+        var verification = _passwordHasher.VerifyHashedPassword(
+            account,
+            account.PasswordHash ?? string.Empty,
             request.CurrentPassword);
 
         if (verification == PasswordVerificationResult.Failed)
@@ -302,72 +289,19 @@ public class AuthController : ControllerBase
             });
         }
 
-        staff.PasswordHash = _staffHasher.HashPassword(
-            staff,
+        account.PasswordHash = _passwordHasher.HashPassword(
+            account,
             request.NewPassword);
-
-        staff.MustChangePassword = false;
 
         await _context.SaveChangesAsync();
 
         return Ok(new
         {
-            message = "Password changed successfully.",
-            login = CreateLoginResponse(
-                staff.Id,
-                staff.FullName,
-                staff.Email,
-                staff.Role,
-                false)
+            message = "Password changed successfully."
         });
     }
-    private IActionResult AuthenticateStaff(
-        StaffAccount staff,
-        string password)
-    {
-        if (!staff.IsActive)
-        {
-            return Unauthorized(new
-            {
-                message = "This account is inactive. Contact an administrator."
-            });
-        }
 
-        var result = _staffHasher.VerifyHashedPassword(
-            staff,
-            staff.PasswordHash,
-            password);
-
-        if (result == PasswordVerificationResult.Failed)
-        {
-            return Unauthorized(new
-            {
-                message = "Invalid username/email or password."
-            });
-        }
-
-        if (staff.Role != "Staff" && staff.Role != "Admin")
-        {
-            return Unauthorized(new
-            {
-                message = "This account has an invalid role."
-            });
-        }
-
-        return Ok(CreateLoginResponse(
-            staff.Id,
-            staff.FullName,
-            staff.Email,
-            staff.Role,
-            staff.MustChangePassword));
-    }
-
-    private object CreateLoginResponse(
-        int accountId,
-        string fullName,
-        string email,
-        string role,
-        bool mustChangePassword)
+    private object CreateLoginResponse(User account)
     {
         string key = _configuration["Jwt:Key"]
             ?? throw new InvalidOperationException(
@@ -386,12 +320,11 @@ public class AuthController : ControllerBase
 
         var claims = new List<Claim>
         {
-            new(ClaimTypes.NameIdentifier, accountId.ToString()),
-            new(ClaimTypes.Name, fullName),
-            new(ClaimTypes.Email, email),
-            new(ClaimTypes.Role, role),
-            new("must_change_password",
-                mustChangePassword.ToString().ToLowerInvariant())
+            new(ClaimTypes.NameIdentifier, account.UserId.ToString()),
+            new(ClaimTypes.Name,
+                $"{account.FirstName} {account.Surname}"),
+            new(ClaimTypes.Email, account.Email),
+            new(ClaimTypes.Role, account.AccountType)
         };
 
         var signingKey = new SymmetricSecurityKey(
@@ -417,11 +350,12 @@ public class AuthController : ControllerBase
             expiresAt = expires,
             account = new
             {
-                id = accountId,
-                fullName,
-                email,
-                role,
-                mustChangePassword
+                id = account.UserId,
+                firstName = account.FirstName,
+                surname = account.Surname,
+                fullName = $"{account.FirstName} {account.Surname}",
+                email = account.Email,
+                role = account.AccountType
             }
         };
     }
@@ -441,9 +375,10 @@ public class ChangePasswordRequest
 
 public class BootstrapAdminRequest
 {
-    public string FullName { get; set; } = string.Empty;
+    public string FirstName { get; set; } = string.Empty;
+    public string Surname { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
-    public string ContactNumber { get; set; } = string.Empty;
+    public string PhoneNumber { get; set; } = string.Empty;
     public string Username { get; set; } = string.Empty;
-    public string TemporaryPassword { get; set; } = string.Empty;
+    public string Password { get; set; } = string.Empty;
 }

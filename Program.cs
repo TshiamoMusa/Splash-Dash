@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Npgsql;
 using SplashDash.Api.Data;
 using System.Text;
 
@@ -74,5 +75,49 @@ app.UseAuthorization();
 app.UseHttpsRedirection();
 
 app.MapControllers();
+
+// --- Database Auto-Initializer ---
+using (var scope = app.Services.CreateScope())
+{
+    var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+    var connectionString = configuration.GetConnectionString("DefaultConnection");
+
+    try
+    {
+        var builderConn = new NpgsqlConnectionStringBuilder(connectionString);
+        var targetDb = builderConn.Database;
+        builderConn.Database = "postgres";
+
+        using (var connection = new NpgsqlConnection(builderConn.ToString()))
+        {
+            connection.Open();
+            using var checkCmd = new NpgsqlCommand($"SELECT 1 FROM pg_database WHERE datname = '{targetDb}'", connection);
+            var exists = checkCmd.ExecuteScalar();
+            
+            if (exists == null)
+            {
+                using var createCmd = new NpgsqlCommand($"CREATE DATABASE \"{targetDb}\"", connection);
+                createCmd.ExecuteNonQuery();
+            }
+        }
+
+        using (var dbConnection = new NpgsqlConnection(connectionString))
+        {
+            dbConnection.Open();
+            string scriptPath = Path.Combine(app.Environment.ContentRootPath, "schema.sql");
+            if (File.Exists(scriptPath))
+            {
+                string script = File.ReadAllText(scriptPath);
+                using var scriptCmd = new NpgsqlCommand(script, dbConnection);
+                scriptCmd.ExecuteNonQuery();
+            }
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Database initialization note: {ex.Message}");
+    }
+}
+// ---------------------------------
 
 app.Run();

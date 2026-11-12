@@ -1,22 +1,14 @@
-
-using System.ComponentModel.DataAnnotations;
-
 namespace SplashDash.Api.Models;
 
 public class Customer
 {
-    public int Id { get; set; }
+    public int CustomerId { get; set; }
 
-    [Required, MaxLength(100)]
-    public string FullName { get; set; } = string.Empty;
+    public int UserId { get; set; }
 
-    [Required, MaxLength(150)]
-    public string Email { get; set; } = string.Empty;
+    public string HomeAddress { get; set; } = string.Empty;
 
-    [Required]
-    public string PasswordHash { get; set; } = string.Empty;
-
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public User? User { get; set; }
 
     public ICollection<Booking> Bookings { get; set; } = new List<Booking>();
 }

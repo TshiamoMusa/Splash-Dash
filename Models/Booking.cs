@@ -1,36 +1,32 @@
-using System.ComponentModel.DataAnnotations;
-
 namespace SplashDash.Api.Models;
 
 public class Booking
 {
-    public int Id { get; set; }
+    public int BookingId { get; set; }
 
     public int CustomerId { get; set; }
 
-    public Customer? Customer { get; set; }
+    public int? StaffId { get; set; }
 
-    [Required, MaxLength(100)]
-    public string VehicleMake { get; set; } = string.Empty;
+    public int ServiceId { get; set; }
 
-    [Required, MaxLength(100)]
-    public string VehicleModel { get; set; } = string.Empty;
-
-    [Required, MaxLength(100)]
-    public string VehicleRegistration { get; set; } = string.Empty;
-
-    [Required, MaxLength(50)]
     public string VehicleType { get; set; } = string.Empty;
 
-    [Required, MaxLength(100)]
-    public string ServiceType { get; set; } = string.Empty;
+    public DateTimeOffset BookingDateTime { get; set; }
 
-    public DateTime BookingDate { get; set; }
+    public string LocationType { get; set; } = string.Empty;
 
-    [MaxLength(30)]
-    public string Status { get; set; } = "Pending";
+    public string? BookingAddress { get; set; }
 
-    public decimal Price { get; set; }
+    public string BookingStatus { get; set; } = "Pending";
 
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public decimal TotalAmount { get; set; }
+
+    public Customer? Customer { get; set; }
+
+    public Staff? Staff { get; set; }
+
+    public Service? Service { get; set; }
+
+    public Payment? Payment { get; set; }
 }

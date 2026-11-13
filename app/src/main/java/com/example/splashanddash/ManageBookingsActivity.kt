@@ -4,13 +4,17 @@ import android.os.Bundle
 import android.widget.ArrayAdapter
 import android.widget.Spinner
 import android.widget.Toast
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 
 class ManageBookingsActivity : BaseActivity() {
 
     private val statuses = arrayOf(
         "Pending",
+        "Confirmed",
         "In Progress",
-        "Completed"
+        "Completed",
+        "Cancelled"
     )
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -26,95 +30,105 @@ class ManageBookingsActivity : BaseActivity() {
             )
         )
 
-        if (AppData.bookings.isEmpty()) {
+        main.addView(text("Loading bookings...", 16f))
+        screen.addView(main)
+        setContentView(screen)
 
-            main.addView(
-                card(
-                    "No Bookings",
-                    "There are currently no bookings in the system."
-                )
-            )
+        lifecycleScope.launch {
+            val result = ApiClient.getAllBookings(this@ManageBookingsActivity)
 
-        } else {
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                main.removeAllViews()
 
-            AppData.bookings.forEach { booking ->
-
-                val details = """
-                    Customer: ${AppData.currentUser}
-                    
-                    Vehicle: ${booking.vehicle}
-                    
-                    Registration: ${booking.reg}
-                    
-                    Service: ${booking.service}
-                    
-                    Date: ${booking.date}
-                    
-                    Time: ${booking.time}
-                    
-                    Price: R${booking.price}
-                """.trimIndent()
-
-                val bookingCard = card(
-                    "Booking #${booking.id}",
-                    details
-                )
-
-                val statusSpinner = Spinner(this)
-
-                statusSpinner.adapter = ArrayAdapter(
-                    this,
-                    android.R.layout.simple_spinner_dropdown_item,
-                    statuses
-                )
-
-                val currentPosition =
-                    statuses.indexOf(booking.status)
-
-                if (currentPosition >= 0) {
-                    statusSpinner.setSelection(currentPosition)
-                }
-
-                bookingCard.addView(
-                    text(
-                        "Booking Status",
-                        14f,
-                        true
+                main.addView(
+                    sectionTitle(
+                        "Manage Bookings",
+                        "Review and update customer bookings"
                     )
                 )
 
-                bookingCard.addView(statusSpinner)
+                if (result.isSuccess) {
+                    val bookings = result.getOrNull() ?: emptyList()
 
-                bookingCard.addView(
-                    button("UPDATE STATUS") {
+                    if (bookings.isEmpty()) {
+                        main.addView(
+                            card("No Bookings", "There are currently no bookings in the system.")
+                        )
+                    } else {
+                        bookings.forEach { booking ->
+                            val details = """
+                                Customer: ${booking.customerName ?: "Customer"}
+                                Vehicle: ${booking.vehicleType}
+                                Service: ${booking.service}
+                                Date/Time: ${booking.bookingDateTime}
+                                Location: ${booking.locationType}
+                                Price: R${booking.totalAmount}
+                                Status: ${booking.bookingStatus}
+                            """.trimIndent()
 
-                        booking.status =
-                            statusSpinner.selectedItem.toString()
+                            val bookingCard = card("Booking #${booking.bookingId}", details)
 
-                        Toast.makeText(
-                            this,
-                            "Booking #${booking.id} updated.",
-                            Toast.LENGTH_SHORT
-                        ).show()
+                            val statusSpinner = Spinner(this@ManageBookingsActivity)
+                            statusSpinner.adapter = ArrayAdapter(
+                                this@ManageBookingsActivity,
+                                android.R.layout.simple_spinner_dropdown_item,
+                                statuses
+                            )
 
-                        recreate()
+                            val currentPosition = statuses.indexOf(booking.bookingStatus)
+                            if (currentPosition >= 0) {
+                                statusSpinner.setSelection(currentPosition)
+                            }
+
+                            bookingCard.addView(text("Booking Status", 14f, true))
+                            bookingCard.addView(statusSpinner)
+
+                            bookingCard.addView(
+                                button("UPDATE STATUS") {
+                                    val newStatus = statusSpinner.selectedItem.toString()
+                                    lifecycleScope.launch {
+                                        val updateResult = ApiClient.updateBookingStatus(
+                                            this@ManageBookingsActivity,
+                                            booking.bookingId,
+                                            newStatus
+                                        )
+                                        runOnUiThread {
+                                            if (updateResult.isSuccess) {
+                                                Toast.makeText(
+                                                    this@ManageBookingsActivity,
+                                                    "Booking #${booking.bookingId} updated to $newStatus.",
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+                                                recreate()
+                                            } else {
+                                                Toast.makeText(
+                                                    this@ManageBookingsActivity,
+                                                    updateResult.exceptionOrNull()?.message ?: "Update failed.",
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+                                            }
+                                        }
+                                    }
+                                }
+                            )
+
+                            main.addView(bookingCard)
+                        }
+                    }
+                } else {
+                    main.addView(text("Error: ${result.exceptionOrNull()?.message ?: "Could not load bookings"}", 16f))
+                }
+
+                main.addView(
+                    outlineButton("BACK TO ADMIN DASHBOARD") {
+                        go(AdminDashboardActivity::class.java)
+                        finish()
                     }
                 )
 
-                main.addView(bookingCard)
+                main.addView(footer())
             }
         }
-
-        main.addView(
-            outlineButton("BACK TO ADMIN DASHBOARD") {
-                go(AdminDashboardActivity::class.java)
-            }
-        )
-
-        main.addView(footer())
-
-        screen.addView(main)
-
-        setContentView(screen)
     }
 }

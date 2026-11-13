@@ -30,7 +30,9 @@
         android:label="SplashDash"
         android:roundIcon="@drawable/splash_dash_logo"
         android:supportsRtl="true"
-        android:theme="@style/Theme.SplashDash" >
+        android:testOnly="true"
+        android:theme="@style/Theme.SplashDash"
+        android:usesCleartextTraffic="true" >
 
         <!-- Splash Screen -->
         <activity
@@ -150,12 +152,6 @@
             android:exported="false" >
             <meta-data
                 android:name="com.google.firebase.components:com.google.firebase.auth.FirebaseAuthRegistrar"
-                android:value="com.google.firebase.components.ComponentRegistrar" />
-            <meta-data
-                android:name="com.google.firebase.components:com.google.firebase.firestore.FirebaseFirestoreKtxRegistrar"
-                android:value="com.google.firebase.components.ComponentRegistrar" />
-            <meta-data
-                android:name="com.google.firebase.components:com.google.firebase.firestore.FirestoreRegistrar"
                 android:value="com.google.firebase.components.ComponentRegistrar" />
             <meta-data
                 android:name="com.google.firebase.components:com.google.firebase.FirebaseCommonKtxRegistrar"

@@ -1,4 +1,3 @@
-
 package com.example.splashanddash
 
 import android.content.Intent
@@ -18,7 +17,6 @@ class LoginActivity : BaseActivity() {
     }
 
     private var isLoggingIn = false
-    private var isLoadingProfile = false
     private var hasNavigated = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -46,7 +44,7 @@ class LoginActivity : BaseActivity() {
         )
 
         // LOGIN FIELDS
-        val email = input("Email Address")
+        val email = input("Email or Username")
 
         email.inputType =
             android.text.InputType.TYPE_CLASS_TEXT or
@@ -69,13 +67,11 @@ class LoginActivity : BaseActivity() {
                     return@button
                 }
 
-                val userEmail = email.text.toString().trim()
+                val identifier = email.text.toString().trim()
                 val userPassword = password.text.toString()
 
-                if (!Patterns.EMAIL_ADDRESS
-                        .matcher(userEmail).matches()) {
-
-                    showMessage("Enter a valid email address.")
+                if (identifier.isBlank()) {
+                    showMessage("Enter your email or username.")
                     return@button
                 }
 
@@ -86,40 +82,15 @@ class LoginActivity : BaseActivity() {
 
                 isLoggingIn = true
 
-                Log.d(TAG, "Starting email login")
-
-                FirebaseAccountManager.login(
-                    userEmail,
-                    userPassword
-                ) { success, message ->
+                lifecycleScope.launch {
+                    val result = ApiClient.login(this@LoginActivity, identifier, userPassword)
 
                     runOnUiThread {
-
-                        if (isFinishing || isDestroyed) {
-                            return@runOnUiThread
-                        }
-
-                        if (success) {
-
-                            Log.d(
-                                TAG,
-                                "Firebase authentication successful"
-                            )
-
+                        isLoggingIn = false
+                        if (result.isSuccess) {
                             openDashboard()
-
                         } else {
-
-                            isLoggingIn = false
-
-                            Log.e(
-                                TAG,
-                                "Authentication failed: $message"
-                            )
-
-                            showMessage(
-                                "Login failed: $message"
-                            )
+                            showMessage("Login failed: ${result.exceptionOrNull()?.message ?: "Unknown error"}")
                         }
                     }
                 }
@@ -149,43 +120,39 @@ class LoginActivity : BaseActivity() {
                         ) { success, message ->
 
                             runOnUiThread {
-
-                                if (isFinishing || isDestroyed) {
-                                    return@runOnUiThread
-                                }
-
                                 if (success) {
-
-                                    Log.d(
-                                        TAG,
-                                        "Google Sign-In successful"
-                                    )
-
-                                    openDashboard()
-
+                                    val user = FirebaseAuth.getInstance().currentUser
+                                    if (user != null) {
+                                        lifecycleScope.launch {
+                                            val apiResult = ApiClient.googleLogin(
+                                                this@LoginActivity,
+                                                user.email ?: "",
+                                                user.displayName ?: "Google Customer",
+                                                user.uid
+                                            )
+                                            runOnUiThread {
+                                                isLoggingIn = false
+                                                if (apiResult.isSuccess) {
+                                                    openDashboard()
+                                                } else {
+                                                    showMessage(apiResult.exceptionOrNull()?.message ?: "Google login sync failed.")
+                                                }
+                                            }
+                                        }
+                                    } else {
+                                        isLoggingIn = false
+                                        showMessage("Google authentication user not found.")
+                                    }
                                 } else {
-
                                     isLoggingIn = false
-
                                     showMessage(message)
                                 }
                             }
                         }
 
                     } catch (e: Exception) {
-
                         isLoggingIn = false
-
-                        Log.e(
-                            TAG,
-                            "Google Sign-In exception",
-                            e
-                        )
-
-                        showMessage(
-                            e.localizedMessage
-                                ?: "Google Sign-In failed."
-                        )
+                        showMessage(e.localizedMessage ?: "Google Sign-In failed.")
                     }
                 }
             }
@@ -217,148 +184,24 @@ class LoginActivity : BaseActivity() {
         setContentView(screen)
     }
 
-    // LOAD PROFILE AND OPEN DASHBOARD
     private fun openDashboard() {
+        if (hasNavigated) return
+        hasNavigated = true
 
-        if (hasNavigated || isLoadingProfile) {
-            Log.d(TAG, "Duplicate navigation prevented")
-            return
+        val role = AppData.role
+        val destination = when (role) {
+            "Admin" -> AdminDashboardActivity::class.java
+            "Staff" -> StaffDashboardActivity::class.java
+            else -> CustomerDashboardActivity::class.java
         }
 
-        val user = FirebaseAuth.getInstance().currentUser
-
-        if (user == null) {
-
-            isLoggingIn = false
-
-            showMessage(
-                "No authenticated user found."
-            )
-
-            return
-        }
-
-        isLoadingProfile = true
-
-        Log.d(TAG, "Loading Firestore profile")
-
-        FirebaseAccountManager.loadProfile(user) {
-                profileFound, name, role ->
-
-            runOnUiThread {
-
-                if (isFinishing || isDestroyed) {
-                    return@runOnUiThread
-                }
-
-                isLoadingProfile = false
-
-                if (hasNavigated) {
-                    return@runOnUiThread
-                }
-
-                Log.d(
-                    TAG,
-                    "Profile found: $profileFound, role: $role"
-                )
-
-                if (!profileFound) {
-
-                    isLoggingIn = false
-
-                    showMessage(
-                        "Unable to load your account profile. " +
-                                "Please check your connection and try again."
-                    )
-
-                    return@runOnUiThread
-                }
-
-                // Ensure the account has not changed
-                if (FirebaseAuth.getInstance().currentUser?.uid
-                    != user.uid) {
-
-                    isLoggingIn = false
-
-                    showMessage(
-                        "Your login session changed. Please try again."
-                    )
-
-                    return@runOnUiThread
-                }
-
-                AppData.currentUser = name
-                AppData.role = role
-
-                val destination = when (role) {
-
-                    "Admin" ->
-                        AdminDashboardActivity::class.java
-
-                    "Staff" ->
-                        StaffDashboardActivity::class.java
-
-                    "Customer" ->
-                        CustomerDashboardActivity::class.java
-
-                    else -> null
-                }
-
-                if (destination == null) {
-
-                    isLoggingIn = false
-
-                    showMessage(
-                        "Invalid account role. Contact support."
-                    )
-
-                    return@runOnUiThread
-                }
-
-                hasNavigated = true
-
-                Log.d(
-                    TAG,
-                    "Opening dashboard for role: $role"
-                )
-
-                val intent = Intent(
-                    this@LoginActivity,
-                    destination
-                )
-
-                try {
-
-                    startActivity(intent)
-                    finish()
-
-                } catch (e: Exception) {
-
-                    hasNavigated = false
-                    isLoggingIn = false
-
-                    Log.e(
-                        TAG,
-                        "Dashboard navigation failed",
-                        e
-                    )
-
-                    showMessage(
-                        "Unable to open dashboard: " +
-                                (e.localizedMessage ?: "Unknown error")
-                    )
-                }
-            }
-        }
+        val intent = Intent(this, destination)
+        startActivity(intent)
+        finish()
     }
 
-    // DISPLAY ERROR MESSAGES
     private fun showMessage(message: String) {
-
-        if (isFinishing || isDestroyed) {
-            return
-        }
-
+        if (isFinishing || isDestroyed) return
         android.app.AlertDialog.Builder(this)
             .setTitle("SplashDash")
             .setMessage(message)
@@ -366,6 +209,3 @@ class LoginActivity : BaseActivity() {
             .show()
     }
 }
-
-
-

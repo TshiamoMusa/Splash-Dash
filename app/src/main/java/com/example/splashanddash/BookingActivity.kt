@@ -5,17 +5,21 @@ import android.os.Bundle
 import android.widget.ArrayAdapter
 import android.widget.Spinner
 import android.widget.LinearLayout
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
 class BookingActivity : BaseActivity() {
 
+    private var servicesList: List<ServiceItem> = emptyList()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         // Ensure user is logged in
-        if (FirebaseAccountManager.auth.currentUser == null) {
+        if (ApiClient.getToken(this).isNullOrBlank()) {
             go(LoginActivity::class.java)
             finish()
             return
@@ -33,30 +37,57 @@ class BookingActivity : BaseActivity() {
 
         // Vehicle Selection
         main.addView(text("Vehicle Type", 17f, true))
-        val vehicles = listOf("Sedan", "SUV", "Hatchback", "Bakkie", "Other")
+        val vehicles = listOf("Small Car", "Large Car", "SUV", "Bakkie")
         val vehicleSpinner = Spinner(this)
         vehicleSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, vehicles)
         main.addView(vehicleSpinner)
 
-        val registration = input("Vehicle Registration")
+        val registration = input("Vehicle Registration (e.g. AB12CD GP)")
         main.addView(registration)
 
-        // Service Selection
+        // Location Type Selection
+        main.addView(text("Service Location Type", 17f, true))
+        val locations = listOf("On-site", "House Call")
+        val locationSpinner = Spinner(this)
+        locationSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, locations)
+        main.addView(locationSpinner)
+
+        val addressField = input("House Call Address (Optional)")
+        main.addView(addressField)
+
+        // Service Selection Spinner Placeholder
         main.addView(text("Select Service", 17f, true))
-        val services = listOf("Exterior Wash", "Interior Cleaning", "Full Detail")
         val serviceSpinner = Spinner(this)
-        serviceSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, services)
         main.addView(serviceSpinner)
 
-        main.addView(
-            text(
-                "Exterior Wash: R400 | Interior Cleaning: R500 | Full Detail: R800",
-                14f
-            )
-        )
+        val serviceInfoText = text("Loading services...", 14f)
+        main.addView(serviceInfoText)
+
+        // Fetch services from API
+        lifecycleScope.launch {
+            val result = ApiClient.getServices()
+            runOnUiThread {
+                if (result.isSuccess) {
+                    servicesList = result.getOrNull() ?: emptyList()
+                    if (servicesList.isNotEmpty()) {
+                        val names = servicesList.map { "${it.serviceName} - R${it.price}" }
+                        serviceSpinner.adapter = ArrayAdapter(
+                            this@BookingActivity,
+                            android.R.layout.simple_spinner_dropdown_item,
+                            names
+                        )
+                        serviceInfoText.text = "Select one of our professional services above."
+                    } else {
+                        serviceInfoText.text = "No services available."
+                    }
+                } else {
+                    serviceInfoText.text = "Could not load services from server."
+                }
+            }
+        }
 
         // Date Picker
-        val dateField = input("Select Booking Date")
+        val dateField = input("Booking Date (YYYY-MM-DD)")
         dateField.isFocusable = false
         dateField.isClickable = true
         val calendar = Calendar.getInstance()
@@ -66,7 +97,7 @@ class BookingActivity : BaseActivity() {
             val picker = DatePickerDialog(
                 this,
                 { _, year, month, day ->
-                    calendar.set(year, month, day, 0, 0, 0)
+                    calendar.set(year, month, day, 9, 0, 0)
                     dateField.setText(SimpleDateFormat("yyyy-MM-dd", Locale.US).format(calendar.time))
                 },
                 today.get(Calendar.YEAR),
@@ -79,57 +110,53 @@ class BookingActivity : BaseActivity() {
         main.addView(dateField)
 
         // Time Input
-        val timeField = input("Time (HH:mm)")
+        val timeField = input("Time (HH:mm, e.g. 10:30)")
         main.addView(timeField)
 
         // Submit Button
         val submitButton = button("CONFIRM BOOKING") {
-            val vehicle = vehicleSpinner.selectedItem.toString()
+            val vehicleType = vehicleSpinner.selectedItem?.toString() ?: "Small Car"
             val reg = registration.text.toString().trim()
-            val service = serviceSpinner.selectedItem.toString()
+            val locationType = locationSpinner.selectedItem?.toString() ?: "On-site"
+            val address = addressField.text.toString().trim()
             val date = dateField.text.toString().trim()
             val time = timeField.text.toString().trim()
-
-            // 1. Calculate the price based on selected service
-            val price = when (service) {
-                "Exterior Wash" -> 400
-                "Interior Cleaning" -> 500
-                "Full Detail" -> 800
-                else -> 0
-            }
+            val selectedServiceIndex = serviceSpinner.selectedItemPosition
 
             val timePattern = Regex("^([01]\\d|2[0-3]):[0-5]\\d$")
 
             when {
+                servicesList.isEmpty() -> showMessage("Services are still loading. Please wait.")
                 reg.isBlank() -> showMessage("Enter your vehicle registration.")
                 date.isBlank() -> showMessage("Please select a booking date.")
-                !timePattern.matches(time) -> showMessage("Enter a valid time, for example 10:30.")
+                !timePattern.matches(time) -> showMessage("Enter a valid time in HH:mm format (e.g. 10:30).")
                 else -> {
-                    // 2. Pass price and status ("Pending") to the repository
-                    FirestoreBookingRepository.createBooking(
-                        vehicle,
-                        reg,
-                        service,
-                        date,
-                        time,
-                        price,    // NEW FIELD
-                        "Pending" // NEW FIELD: Ensures PaymentActivity can find it
-                    ) { success, message ->
-                        if (success) {
-                            android.app.AlertDialog.Builder(this@BookingActivity)
-                                .setTitle("Booking Confirmed")
-                                .setMessage("Your booking has been saved online. Would you like to pay now?")
-                                .setPositiveButton("PAY NOW") { _, _ ->
-                                    go(PaymentActivity::class.java)
-                                    finish()
-                                }
-                                .setNegativeButton("LATER") { _, _ ->
-                                    go(BookingHistoryActivity::class.java)
-                                    finish()
-                                }
-                                .show()
-                        } else {
-                            showMessage(message)
+                    val serviceItem = servicesList.getOrNull(selectedServiceIndex) ?: servicesList.first()
+                    val dateTimeIso = "${date}T${time}:00Z"
+
+                    lifecycleScope.launch {
+                        val bookingResult = ApiClient.createBooking(
+                            context = this@BookingActivity,
+                            serviceId = serviceItem.serviceId,
+                            vehicleType = vehicleType,
+                            bookingDateTime = dateTimeIso,
+                            locationType = locationType,
+                            bookingAddress = if (address.isBlank()) null else address
+                        )
+
+                        runOnUiThread {
+                            if (bookingResult.isSuccess) {
+                                android.app.AlertDialog.Builder(this@BookingActivity)
+                                    .setTitle("Booking Confirmed")
+                                    .setMessage("Your booking has been saved to the shared PostgreSQL database successfully!")
+                                    .setPositiveButton("VIEW MY BOOKINGS") { _, _ ->
+                                        go(BookingHistoryActivity::class.java)
+                                        finish()
+                                    }
+                                    .show()
+                            } else {
+                                showMessage(bookingResult.exceptionOrNull()?.message ?: "Could not create booking.")
+                            }
                         }
                     }
                 }

@@ -3,14 +3,18 @@ package com.example.splashanddash
 import android.os.Bundle
 import android.widget.ArrayAdapter
 import android.widget.Spinner
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 
 
 class ServiceQueueActivity : BaseActivity() {
 
     private val statuses = arrayOf(
         "Pending",
+        "Confirmed",
         "In Progress",
-        "Completed"
+        "Completed",
+        "Cancelled"
     )
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -26,89 +30,97 @@ class ServiceQueueActivity : BaseActivity() {
             )
         )
 
-        if (AppData.bookings.isEmpty()) {
+        main.addView(text("Loading service queue...", 16f))
+        screen.addView(main)
+        setContentView(screen)
 
-            main.addView(
-                card(
-                    "Queue Empty",
-                    "There are currently no bookings waiting for service."
-                )
-            )
+        lifecycleScope.launch {
+            val result = ApiClient.getAllBookings(this@ServiceQueueActivity)
 
-        } else {
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                main.removeAllViews()
 
-            AppData.bookings.forEach { booking ->
-
-                val details = """
-                    Vehicle: ${booking.vehicle}
-                    
-                    Registration: ${booking.reg}
-                    
-                    Service: ${booking.service}
-                    
-                    Date: ${booking.date}
-                    
-                    Time: ${booking.time}
-                    
-                    Current Status: ${booking.status}
-                """.trimIndent()
-
-                val bookingCard = card(
-                    "Booking #${booking.id}",
-                    details
-                )
-
-                bookingCard.addView(
-                    text(
-                        "Update Service Status",
-                        14f,
-                        true
+                main.addView(
+                    sectionTitle(
+                        "Service Queue",
+                        "Manage today's vehicle cleaning services"
                     )
                 )
 
-                val statusSpinner = Spinner(this)
+                if (result.isSuccess) {
+                    val bookings = result.getOrNull() ?: emptyList()
 
-                statusSpinner.adapter = ArrayAdapter(
-                    this,
-                    android.R.layout.simple_spinner_dropdown_item,
-                    statuses
-                )
+                    if (bookings.isEmpty()) {
+                        main.addView(
+                            card("Queue Empty", "There are currently no bookings waiting for service.")
+                        )
+                    } else {
+                        bookings.forEach { booking ->
+                            val details = """
+                                Customer: ${booking.customerName ?: "Customer"} (${booking.customerPhone ?: "No phone"})
+                                Vehicle: ${booking.vehicleType}
+                                Service: ${booking.service}
+                                Date/Time: ${booking.bookingDateTime}
+                                Location: ${booking.locationType}
+                                Current Status: ${booking.bookingStatus}
+                            """.trimIndent()
 
-                val position =
-                    statuses.indexOf(booking.status)
+                            val bookingCard = card("Booking #${booking.bookingId}", details)
 
-                if (position >= 0) {
-                    statusSpinner.setSelection(position)
+                            bookingCard.addView(text("Update Service Status", 14f, true))
+
+                            val statusSpinner = Spinner(this@ServiceQueueActivity)
+                            statusSpinner.adapter = ArrayAdapter(
+                                this@ServiceQueueActivity,
+                                android.R.layout.simple_spinner_dropdown_item,
+                                statuses
+                            )
+
+                            val position = statuses.indexOf(booking.bookingStatus)
+                            if (position >= 0) {
+                                statusSpinner.setSelection(position)
+                            }
+
+                            bookingCard.addView(statusSpinner)
+
+                            bookingCard.addView(
+                                button("UPDATE STATUS") {
+                                    val newStatus = statusSpinner.selectedItem.toString()
+                                    lifecycleScope.launch {
+                                        val updateResult = ApiClient.updateBookingStatus(
+                                            this@ServiceQueueActivity,
+                                            booking.bookingId,
+                                            newStatus
+                                        )
+                                        runOnUiThread {
+                                            if (updateResult.isSuccess) {
+                                                showAppMessage("Booking #${booking.bookingId} status updated to $newStatus.")
+                                                recreate()
+                                            } else {
+                                                showAppMessage(updateResult.exceptionOrNull()?.message ?: "Update failed.")
+                                            }
+                                        }
+                                    }
+                                }
+                            )
+
+                            main.addView(bookingCard)
+                        }
+                    }
+                } else {
+                    main.addView(text("Error: ${result.exceptionOrNull()?.message ?: "Could not load bookings"}", 16f))
                 }
 
-                bookingCard.addView(statusSpinner)
-
-                bookingCard.addView(
-                    button("UPDATE STATUS") {
-
-                        booking.status =
-                            statusSpinner.selectedItem.toString()
-
-                        showAppMessage("Service status updated.")
-
-                        recreate()
+                main.addView(
+                    outlineButton("BACK TO STAFF DASHBOARD") {
+                        go(StaffDashboardActivity::class.java)
+                        finish()
                     }
                 )
 
-                main.addView(bookingCard)
+                main.addView(footer())
             }
         }
-
-        main.addView(
-            outlineButton("BACK TO STAFF DASHBOARD") {
-                go(StaffDashboardActivity::class.java)
-            }
-        )
-
-        main.addView(footer())
-
-        screen.addView(main)
-
-        setContentView(screen)
     }
 }

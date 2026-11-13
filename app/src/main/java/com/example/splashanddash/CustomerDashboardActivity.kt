@@ -2,7 +2,8 @@ package com.example.splashanddash
 
 import android.os.Bundle
 import android.widget.LinearLayout
-import com.google.firebase.auth.FirebaseAuth
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 
 class CustomerDashboardActivity : BaseActivity() {
 
@@ -13,7 +14,7 @@ class CustomerDashboardActivity : BaseActivity() {
             "Customer Dashboard onCreate called"
         )
 
-        if (FirebaseAuth.getInstance().currentUser == null) {
+        if (ApiClient.getToken(this).isNullOrBlank()) {
             go(LoginActivity::class.java)
             finish()
             return
@@ -29,65 +30,38 @@ class CustomerDashboardActivity : BaseActivity() {
     override fun onResume() {
         super.onResume()
 
-        if (FirebaseAuth.getInstance().currentUser != null) {
+        if (!ApiClient.getToken(this).isNullOrBlank()) {
             loadDashboardStatistics()
         }
     }
 
     private fun loadDashboardStatistics() {
+        lifecycleScope.launch {
+            val result = ApiClient.getCustomerBookings(this@CustomerDashboardActivity)
 
-        val expectedUid =
-            FirebaseAuth.getInstance().currentUser?.uid ?: return
-        android.util.Log.d(
-            "SplashDashDashboard",
-            "Loading Firestore booking statistics"
-        )
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
 
-        FirestoreBookingRepository.getCustomerBookings {
-                bookings, error ->
+                if (result.isSuccess) {
+                    val bookings = result.getOrNull() ?: emptyList()
+                    val totalBookings = bookings.size
+                    val pendingBookings = bookings.count { it.bookingStatus.equals("Pending", ignoreCase = true) }
+                    val completedBookings = bookings.count { it.bookingStatus.equals("Completed", ignoreCase = true) }
 
-            if (isFinishing || isDestroyed) {
-                return@getCustomerBookings
+                    showDashboard(
+                        total = totalBookings,
+                        pending = pendingBookings,
+                        completed = completedBookings
+                    )
+                } else {
+                    showDashboard(
+                        total = null,
+                        pending = null,
+                        completed = null,
+                        error = result.exceptionOrNull()?.message ?: "Could not load stats"
+                    )
+                }
             }
-
-            // Ignore results if the signed-in account changed.
-            if (FirebaseAuth.getInstance().currentUser?.uid != expectedUid) {
-                return@getCustomerBookings
-            }
-
-            if (error != null) {
-                showDashboard(
-                    total = null,
-                    pending = null,
-                    completed = null,
-                    error = error
-                )
-                return@getCustomerBookings
-            }
-
-            val customerBookings = bookings.orEmpty()
-
-            val totalBookings = customerBookings.size
-
-            val pendingBookings = customerBookings.count {
-                it.status.equals(
-                    "Pending",
-                    ignoreCase = true
-                )
-            }
-
-            val completedBookings = customerBookings.count {
-                it.status.equals(
-                    "Completed",
-                    ignoreCase = true
-                )
-            }
-
-            showDashboard(
-                total = totalBookings,
-                pending = pendingBookings,
-                completed = completedBookings
-            )
         }
     }
 
@@ -101,12 +75,8 @@ class CustomerDashboardActivity : BaseActivity() {
         val screen = content()
         val main = column()
 
-        // Retrieve the signed-in customer's name.
         val customerName = AppData.currentUser
             .takeIf { it.isNotBlank() && it != "Guest" }
-            ?: FirebaseAuth.getInstance()
-                .currentUser
-                ?.displayName
             ?: "Customer"
 
         // DASHBOARD HEADER
@@ -241,7 +211,7 @@ class CustomerDashboardActivity : BaseActivity() {
 
         main.addView(
             outlineButton("LOG OUT") {
-                FirebaseAccountManager.signOut()
+                ApiClient.clearSession(this@CustomerDashboardActivity)
 
                 go(LoginActivity::class.java)
                 finish()

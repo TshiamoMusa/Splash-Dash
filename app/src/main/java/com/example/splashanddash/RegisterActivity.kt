@@ -4,6 +4,8 @@ import android.os.Bundle
 import android.util.Patterns
 import android.widget.EditText
 import android.widget.LinearLayout
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 
 class RegisterActivity : BaseActivity() {
 
@@ -22,42 +24,46 @@ class RegisterActivity : BaseActivity() {
 
         main.addView(text("Personal Information", 20f, true))
 
-        val name = input("Full Name")
-        val email = input("Email Address")
-        val phone = input("Phone Number")
-        val address = input("Address (Optional)")
+        val fullNameField = input("Full Name")
+        val emailField = input("Email Address")
+        val phoneField = input("Phone Number")
+        val addressField = input("Home Address")
 
-        email.inputType =
+        emailField.inputType =
             android.text.InputType.TYPE_CLASS_TEXT or
                     android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
 
-        phone.inputType =
+        phoneField.inputType =
             android.text.InputType.TYPE_CLASS_PHONE
 
-        main.addView(name)
-        main.addView(email)
-        main.addView(phone)
-        main.addView(address)
+        main.addView(fullNameField)
+        main.addView(emailField)
+        main.addView(phoneField)
+        main.addView(addressField)
 
         main.addView(text("Security", 20f, true))
 
-        val password = input("Password")
-        password.inputType = 129
+        val passwordField = input("Password")
+        passwordField.inputType = 129
 
         val confirmPassword = input("Confirm Password")
         confirmPassword.inputType = 129
 
-        main.addView(password)
+        main.addView(passwordField)
         main.addView(confirmPassword)
 
         val registerButton = button("CREATE ACCOUNT") {
 
-            val fullName = name.text.toString().trim()
-            val userEmail = email.text.toString().trim()
-            val userPhone = phone.text.toString().trim()
-            val userAddress = address.text.toString().trim()
-            val userPassword = password.text.toString()
+            val fullName = fullNameField.text.toString().trim()
+            val userEmail = emailField.text.toString().trim()
+            val userPhone = phoneField.text.toString().trim()
+            val userAddress = addressField.text.toString().trim()
+            val userPassword = passwordField.text.toString()
             val confirm = confirmPassword.text.toString()
+
+            val nameParts = fullName.split(" ", limit = 2)
+            val firstName = nameParts.getOrNull(0) ?: fullName
+            val surname = nameParts.getOrNull(1) ?: "Customer"
 
             when {
                 fullName.isBlank() -> {
@@ -72,6 +78,10 @@ class RegisterActivity : BaseActivity() {
                     showMessage("Please enter your phone number.")
                 }
 
+                userAddress.isBlank() -> {
+                    showMessage("Please enter your home address.")
+                }
+
                 userPassword.length < 8 -> {
                     showMessage(
                         "Your password must contain at least 8 characters."
@@ -83,27 +93,29 @@ class RegisterActivity : BaseActivity() {
                 }
 
                 else -> {
-                    FirebaseAccountManager.register(
-                        fullName,
-                        userEmail,
-                        userPassword,
-                        userPhone,
-                        userAddress
-                    ) { success, message ->
+                    lifecycleScope.launch {
+                        val result = ApiClient.registerCustomer(
+                            this@RegisterActivity,
+                            firstName,
+                            surname,
+                            userEmail,
+                            userPhone,
+                            userAddress,
+                            userPassword
+                        )
 
-                        if (success) {
-                            AppData.currentUser = fullName
-                            AppData.role = "Customer"
-
-                            showMessage(
-                                "Account created successfully!",
-                                "Registration Successful"
-                            ) {
-                                go(CustomerDashboardActivity::class.java)
-                                finish()
+                        runOnUiThread {
+                            if (result.isSuccess) {
+                                showMessage(
+                                    "Account created successfully! Please login.",
+                                    "Registration Successful"
+                                ) {
+                                    go(LoginActivity::class.java)
+                                    finish()
+                                }
+                            } else {
+                                showMessage(result.exceptionOrNull()?.message ?: "Registration failed.")
                             }
-                        } else {
-                            showMessage(message)
                         }
                     }
                 }
@@ -143,5 +155,3 @@ class RegisterActivity : BaseActivity() {
             .show()
     }
 }
-
-

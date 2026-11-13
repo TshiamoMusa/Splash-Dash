@@ -2,13 +2,15 @@ package com.example.splashanddash
 
 import android.os.Bundle
 import android.widget.LinearLayout
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 
 class BookingHistoryActivity : BaseActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        if (FirebaseAccountManager.auth.currentUser == null) {
+        if (ApiClient.getToken(this).isNullOrBlank()) {
             go(LoginActivity::class.java)
             finish()
             return
@@ -20,7 +22,7 @@ class BookingHistoryActivity : BaseActivity() {
     override fun onResume() {
         super.onResume()
 
-        if (FirebaseAccountManager.auth.currentUser != null) {
+        if (!ApiClient.getToken(this).isNullOrBlank()) {
             loadBookings()
         }
     }
@@ -38,95 +40,81 @@ class BookingHistoryActivity : BaseActivity() {
         )
 
         main.addView(
-            text("Loading your bookings...", 16f)
+            text("Loading your bookings from PostgreSQL database...", 16f)
         )
 
         screen.addView(main)
         setContentView(screen)
 
-        FirestoreBookingRepository.getCustomerBookings {
-                bookings, error ->
+        lifecycleScope.launch {
+            val result = ApiClient.getCustomerBookings(this@BookingHistoryActivity)
 
-            if (isFinishing || isDestroyed) {
-                return@getCustomerBookings
-            }
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
 
-            main.removeAllViews()
+                main.removeAllViews()
 
-            main.addView(
-                sectionTitle(
-                    "My Bookings",
-                    "Your online booking history"
+                main.addView(
+                    sectionTitle(
+                        "My Bookings",
+                        "Your database booking history"
+                    )
                 )
-            )
 
-            when {
-                error != null -> {
-                    main.addView(
-                        text("Error: $error", 16f)
-                    )
-                }
+                if (result.isSuccess) {
+                    val bookings = result.getOrNull() ?: emptyList()
 
-                bookings.isNullOrEmpty() -> {
-                    main.addView(
-                        text(
-                            "You have no bookings yet.",
-                            17f
-                        )
-                    )
-                }
-
-                else -> {
-                    main.addView(
-                        text(
-                            "Total Bookings: ${bookings.size}",
-                            18f,
-                            true
-                        )
-                    )
-
-                    bookings.forEach { booking ->
-
-                        val details = """
-                            Vehicle: ${booking.vehicle}
-                            Registration: ${booking.reg}
-                            Service: ${booking.service}
-                            Price: R${booking.price}
-                            Date: ${booking.date}
-                            Time: ${booking.time}
-                            Status: ${booking.status}
-                        """.trimIndent()
-
+                    if (bookings.isEmpty()) {
                         main.addView(
-                            card(
-                                "Booking ${booking.id.toString().take(8)}",
-                                details
-                            )
+                            text("You have no bookings yet.", 17f)
                         )
+                    } else {
+                        main.addView(
+                            text("Total Bookings: ${bookings.size}", 18f, true)
+                        )
+
+                        bookings.forEach { booking ->
+                            val details = """
+                                Service: ${booking.service}
+                                Vehicle: ${booking.vehicleType}
+                                Date/Time: ${booking.bookingDateTime}
+                                Location: ${booking.locationType} ${if (!booking.bookingAddress.isNullOrBlank()) "(${booking.bookingAddress})" else ""}
+                                Amount: R${booking.totalAmount}
+                                Status: ${booking.bookingStatus}
+                            """.trimIndent()
+
+                            main.addView(
+                                card("Booking #${booking.bookingId}", details)
+                            )
+                        }
                     }
+                } else {
+                    main.addView(
+                        text("Error: ${result.exceptionOrNull()?.message ?: "Could not load bookings"}", 16f)
+                    )
                 }
+
+                main.addView(
+                    button("BOOK ANOTHER SERVICE") {
+                        go(BookingActivity::class.java)
+                    }
+                )
+
+                main.addView(
+                    outlineButton("REFRESH BOOKINGS") {
+                        loadBookings()
+                    }
+                )
+
+                main.addView(
+                    outlineButton("BACK TO DASHBOARD") {
+                        go(CustomerDashboardActivity::class.java)
+                        finish()
+                    }
+                )
+
+                main.addView(footer())
             }
-
-            main.addView(
-                button("BOOK ANOTHER SERVICE") {
-                    go(BookingActivity::class.java)
-                }
-            )
-
-            main.addView(
-                outlineButton("REFRESH BOOKINGS") {
-                    loadBookings()
-                }
-            )
-
-            main.addView(
-                outlineButton("BACK TO DASHBOARD") {
-                    go(CustomerDashboardActivity::class.java)
-                    finish()
-                }
-            )
-
-            main.addView(footer())
         }
     }
 }

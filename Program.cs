@@ -95,9 +95,6 @@ app.MapControllers();
 // --- Database Auto-Initializer ---
 using (var scope = app.Services.CreateScope())
 {
-    var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
-    var connectionString = configuration.GetConnectionString("DefaultConnection");
-
     try
     {
         var builderConn = new NpgsqlConnectionStringBuilder(connectionString);

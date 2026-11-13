@@ -1,4 +1,5 @@
-﻿<!DOCTYPE html>
+﻿
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -12,14 +13,6 @@
 </head>
 <body>
 
-    <!--
-        NOTES FOR THE TEAM (see BACKEND_NOTES.md for the full list)
-        - ACCESS: Admin role only. The API must check the logged-in role on every request.
-          Hiding the link is not security.
-        - Revenue means COMPLETED bookings only (same definition as the dashboard). Cancelled bookings never count as revenue.
-        - Printing: when the style pass happens, hide the header, navigation and buttons with @media print.
-    -->
-
     <header class="admin-header">
         <div class="header-content">
             <div>
@@ -29,9 +22,8 @@
             </div>
 
             <div class="admin-profile">
-                <span>Welcome, <span id="adminName"><!-- Backend: display the logged-in admin's name --></span></span>
+                <span>Welcome, <span id="adminName"></span></span>
                 <a href="change_password.html">Change Password</a>
-                <!-- Backend: Logout must end the session/token, then go to the public home page -->
                 <a href="index.html">Logout</a>
             </div>
         </div>
@@ -41,10 +33,12 @@
         <a href="admin - dashboard.html">Dashboard</a>
         <a href="admin - manage_bookings.html">Bookings</a>
         <a href="admin - manage_customers.html">Customers</a>
-        <a href="admin - manage_staff.html">Staff</a>
+        <a href="admin - manage_staff.html">Accounts</a>
     </nav>
 
     <main class="admin-container">
+
+        <p id="report-message" role="status" aria-live="polite"></p>
 
         <!-- Report Filters -->
         <section class="dashboard-section">
@@ -54,24 +48,33 @@
                 <p>Select a date range to view business performance.</p>
             </div>
 
-            <!-- Backend: apply the selected dates to all report queries -->
-            <form method="GET" class="filter-form">
+            <form class="filter-form" id="report-filter-form">
 
                 <div class="form-group">
                     <label for="start-date">Start Date</label>
-                    <input type="date" id="start-date" name="start_date" required>
+                    <input
+                        type="date"
+                        id="start-date"
+                        name="start_date"
+                        required>
                 </div>
 
                 <div class="form-group">
                     <label for="end-date">End Date</label>
-                    <input type="date" id="end-date" name="end_date" required>
+                    <input
+                        type="date"
+                        id="end-date"
+                        name="end_date"
+                        required>
                 </div>
 
-                <button type="submit">Generate Reports</button>
+                <button type="submit" id="generate-report-button">
+                    Generate Reports
+                </button>
 
             </form>
 
-            <button type="button" class="print-btn" onclick="window.print()">
+            <button type="button" class="print-btn" id="print-reports">
                 Print Reports
             </button>
 
@@ -82,25 +85,22 @@
 
             <div class="section-heading">
                 <h2>Report Summary</h2>
-                <p>Summary for the selected reporting period.</p>
+                <p id="report-period">Summary for the selected reporting period.</p>
             </div>
 
             <div class="stats-grid">
 
                 <div class="stat-card">
-                    <!-- Backend: count completed bookings in the selected period -->
                     <strong id="period-bookings">--</strong>
                     <p>Completed Bookings</p>
                 </div>
 
                 <div class="stat-card">
-                    <!-- Backend: calculate revenue from completed bookings -->
                     <strong id="period-revenue">R --</strong>
                     <p>Revenue Generated</p>
                 </div>
 
                 <div class="stat-card">
-                    <!-- Backend: identify the most frequently booked service -->
                     <strong id="popular-service">--</strong>
                     <p>Most Popular Service</p>
                 </div>
@@ -130,12 +130,9 @@
                     </thead>
 
                     <tbody id="service-report">
-
-                        <!-- Backend: group bookings by service and calculate percentages -->
                         <tr>
-                            <td colspan="3">Service report data will appear here.</td>
+                            <td colspan="3">Report data will appear here.</td>
                         </tr>
-
                     </tbody>
 
                 </table>
@@ -149,7 +146,7 @@
 
             <div class="section-heading">
                 <h2>Revenue Report</h2>
-                <p>Review revenue generated from completed bookings.</p>
+                <p>Review the value of completed bookings by service.</p>
             </div>
 
             <div class="table-container">
@@ -165,12 +162,9 @@
                     </thead>
 
                     <tbody id="revenue-report">
-
-                        <!-- Backend: group completed booking revenue by service -->
                         <tr>
-                            <td colspan="3">Revenue report data will appear here.</td>
+                            <td colspan="3">Report data will appear here.</td>
                         </tr>
-
                     </tbody>
 
                     <tfoot>
@@ -208,12 +202,9 @@
                     </thead>
 
                     <tbody id="status-report">
-
-                        <!-- Backend: group bookings by status (Pending, In Progress, Completed, Cancelled) within the selected period -->
                         <tr>
-                            <td colspan="3">Booking status data will appear here.</td>
+                            <td colspan="3">Report data will appear here.</td>
                         </tr>
-
                     </tbody>
 
                 </table>
@@ -228,5 +219,7 @@
         <p>&copy; 2026 Splash &amp; Dash Car Wash Management System</p>
     </footer>
 
+    <script src="js/portal-pages.js"></script>
+    <script src="js/admin-reports.js"></script>
 </body>
 </html>

@@ -1,24 +1,22 @@
-﻿<!DOCTYPE html>
+﻿
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow">
+
     <title>Admin Dashboard - Splash &amp; Dash Admin Portal</title>
+
     <link rel="stylesheet" href="css/base.css">
     <link rel="stylesheet" href="css/admin.css">
+
     <script src="js/portal-auth.js"></script>
     <script>Portal.requireRole("Admin");</script>
 </head>
 <body>
 
-    <!--
-        NOTES FOR THE TEAM (see BACKEND_NOTES.md for the full list)
-        - ACCESS: Admin role only. The API must check the logged-in role on every request.
-          Hiding the link is not security.
-        - Total Revenue = sum of Price for COMPLETED bookings (same definition on the Reports page).
-    -->
-
+    <!-- Only authenticated administrators can access this dashboard. -->
     <header class="admin-header">
         <div class="header-content">
             <div>
@@ -28,9 +26,8 @@
             </div>
 
             <div class="admin-profile">
-                <span>Welcome, <span id="adminName"><!-- Backend: display the logged-in admin's name --></span></span>
+                <span>Welcome, <span id="adminName"></span></span>
                 <a href="change_password.html">Change Password</a>
-                <!-- Backend: Logout must end the session/token, then go to the public home page -->
                 <a href="index.html">Logout</a>
             </div>
         </div>
@@ -45,7 +42,7 @@
 
     <main class="admin-container">
 
-        <!-- Business Statistics -->
+        <!-- Statistics are calculated using booking records from the API. -->
         <section class="dashboard-section">
             <div class="section-heading">
                 <h2>Business Overview</h2>
@@ -55,50 +52,41 @@
             <div class="stats-grid">
 
                 <div class="stat-card">
-                    <!-- Backend: retrieve total registered customers -->
-                    <strong id="total-customers">--</strong>
-                    <p>Total Customers</p>
-                </div>
-
-                <div class="stat-card">
-                    <!-- Backend: retrieve all booking records -->
                     <strong id="total-bookings">--</strong>
                     <p>Total Bookings</p>
                 </div>
 
                 <div class="stat-card">
-                    <!-- Backend: count bookings scheduled for today -->
                     <strong id="todays-bookings">--</strong>
                     <p>Today's Bookings</p>
                 </div>
 
                 <div class="stat-card">
-                    <!-- Backend: count bookings awaiting service -->
                     <strong id="pending-bookings">--</strong>
                     <p>Pending Bookings</p>
                 </div>
 
                 <div class="stat-card">
-                    <!-- Backend: retrieve active staff members -->
-                    <strong id="total-staff">--</strong>
-                    <p>Active Staff Members</p>
+                    <strong id="completed-bookings">--</strong>
+                    <p>Completed Bookings</p>
                 </div>
 
                 <div class="stat-card">
-                    <!-- Backend: calculate revenue from completed bookings -->
                     <strong id="total-revenue">R --</strong>
-                    <p>Total Revenue</p>
+                    <p>Revenue from Completed Bookings</p>
                 </div>
 
             </div>
         </section>
 
-        <!-- Recent Bookings -->
+        <!-- Displays the five most recently scheduled bookings. -->
         <section class="dashboard-section">
             <div class="section-heading">
                 <h2>Recent Bookings</h2>
                 <p>Keep track of the latest customer bookings.</p>
             </div>
+
+            <div id="dashboard-message" role="status" aria-live="polite"></div>
 
             <div class="table-container">
                 <table class="admin-table">
@@ -114,14 +102,9 @@
                     </thead>
 
                     <tbody id="recent-bookings">
-
-                        <!-- Backend: display the latest booking records here -->
                         <tr>
-                            <td colspan="6">
-                                Booking records will appear here.
-                            </td>
+                            <td colspan="6">Loading bookings...</td>
                         </tr>
-
                     </tbody>
                 </table>
             </div>
@@ -132,6 +115,9 @@
     <footer class="admin-footer">
         <p>&copy; 2026 Splash &amp; Dash Car Wash Management System</p>
     </footer>
+
+    <!-- Loads dashboard data from the Splash & Dash API. -->
+    <script src="js/admin-dashboard.js"></script>
 
 </body>
 </html>

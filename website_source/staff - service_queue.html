@@ -1,4 +1,5 @@
-﻿<!DOCTYPE html>
+﻿
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -9,18 +10,9 @@
     <link rel="stylesheet" href="css/staff.css">
     <script src="js/portal-auth.js"></script>
     <script>Portal.requireRole("Staff");</script>
+    <script src="js/staff-service-queue.js" defer></script>
 </head>
 <body>
-
-    <!--
-        NOTES FOR THE TEAM (see BACKEND_NOTES.md for the full list)
-        - ACCESS: Staff role only. The API must check the logged-in role on every request.
-          Hiding the link is not security.
-        - Staff can SEE the customer's phone number but cannot edit customer details.
-        - Staff can update a booking's status, move it (date/time) or cancel it (status becomes Cancelled; the record is kept).
-        - Cancelled bookings are hidden from the default queue view and only appear when the status filter is set to Cancelled.
-        - Price is not shown to staff. House Call bookings must show the service address.
-    -->
 
     <header class="staff-header">
         <div class="header-content">
@@ -31,9 +23,8 @@
             </div>
 
             <div class="staff-profile">
-                <span>Welcome, <span id="staffName"><!-- Backend: display the logged-in staff's name --></span></span>
+                <span>Welcome, <span id="staffName"></span></span>
                 <a href="change_password.html">Change Password</a>
-                <!-- Backend: Logout must end the session/token, then go to the public home page -->
                 <a href="index.html">Logout</a>
             </div>
         </div>
@@ -47,10 +38,9 @@
 
         <section class="queue-section">
             <h2>Bookings</h2>
-            <p>One shared queue for everyone. Update a status, move a booking to a new date and time, or cancel it.</p>
+            <p>One shared queue for everyone. Update booking statuses or cancel bookings when necessary.</p>
 
-            <!-- Backend: connect the search and filters to the booking records -->
-            <form class="filter-form" method="GET">
+            <form class="filter-form" id="booking-filter-form">
 
                 <div class="form-group">
                     <label for="booking-search">Search Bookings</label>
@@ -58,14 +48,15 @@
                         type="search"
                         id="booking-search"
                         name="search"
-                        placeholder="Search by booking ID, customer or registration">
+                        placeholder="Search by booking ID, customer or phone number">
                 </div>
 
                 <div class="form-group">
                     <label for="booking-status">Booking Status</label>
                     <select id="booking-status" name="status">
-                        <option value="">All Statuses</option>
+                        <option value="">Active Bookings</option>
                         <option value="Pending">Pending</option>
+                        <option value="Confirmed">Confirmed</option>
                         <option value="In Progress">In Progress</option>
                         <option value="Completed">Completed</option>
                         <option value="Cancelled">Cancelled</option>
@@ -76,18 +67,19 @@
                     <label for="booking-type">Booking Type</label>
                     <select id="booking-type" name="booking_type">
                         <option value="">All Booking Types</option>
-                        <option value="At Location">At Location</option>
+                        <option value="On-site">At Location</option>
                         <option value="House Call">House Call</option>
                     </select>
                 </div>
 
                 <div class="form-group">
                     <label for="booking-date">Booking Date</label>
-                    <!-- Backend: default this date to today -->
                     <input type="date" id="booking-date" name="date">
                 </div>
 
                 <button type="submit">Apply Filters</button>
+
+                <button type="button" id="clear-booking-filters">Clear Filters</button>
 
             </form>
 
@@ -109,72 +101,9 @@
                     </thead>
 
                     <tbody id="bookingQueue">
-
-                        <!-- Price is NOT returned to the Staff role. -->
-                        <!-- Backend: for each booking returned by the API, copy this row template
-                             into this table body and remove the placeholder row below. -->
-                        <template id="booking-row-template">
-                            <tr>
-                            <td><!-- Booking ID --></td>
-                            <td>
-                                <span class="cell-main"><!-- Customer name --></span>
-                                <span class="cell-sub"><!-- Customer phone number (read-only) --></span>
-                            </td>
-                            <td>
-                                <span class="cell-main"><!-- Vehicle --></span>
-                                <span class="cell-sub"><!-- Registration number --></span>
-                            </td>
-                            <td><!-- Service --></td>
-                            <td>
-                                <span class="cell-main"><!-- At Location / House Call --></span>
-                                <span class="cell-sub"><!-- Service address (House Call only) --></span>
-                            </td>
-                            <td>
-                                <span class="cell-main"><!-- Booking date --></span>
-                                <span class="cell-sub"><!-- Booking time --></span>
-                            </td>
-                            <td><!-- Current booking status --></td>
-                            <td>
-                                <div class="row-actions">
-                                    <!-- Backend: update the booking's status -->
-                                    <form method="POST">
-                                        <input type="hidden" name="booking_id" value="">
-                                        <select name="status" aria-label="Booking status" required>
-                                            <option value="Pending">Pending</option>
-                                            <option value="In Progress">In Progress</option>
-                                            <option value="Completed">Completed</option>
-                                        </select>
-                                        <button type="submit" name="updateStatus">Save Status</button>
-                                    </form>
-
-                                    <!-- Backend: move = change the booking's date and time only -->
-                                    <details>
-                                        <summary>Move booking</summary>
-                                        <form method="POST">
-                                            <input type="hidden" name="booking_id" value="">
-                                            <input type="date" name="new_date" aria-label="New date" required>
-                                            <input type="time" name="new_time" aria-label="New time" required>
-                                            <button type="submit" name="moveBooking">Move</button>
-                                        </form>
-                                    </details>
-
-                                    <!-- Backend: set the booking's status to Cancelled and keep the record.
-                                         Hide all of these actions for bookings that are already Cancelled. -->
-                                    <form method="POST" onsubmit="return confirm('Cancel this booking?')">
-                                        <input type="hidden" name="booking_id" value="">
-                                        <button type="submit" name="cancelBooking">Cancel Booking</button>
-                                    </form>
-                                </div>
-                            </td>
-                            </tr>
-                        </template>
-
                         <tr>
-                            <td colspan="8">
-                                Booking records will appear here.
-                            </td>
+                            <td colspan="8">Loading bookings...</td>
                         </tr>
-
                     </tbody>
 
                 </table>

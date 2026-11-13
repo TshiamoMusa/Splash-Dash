@@ -22,148 +22,305 @@ namespace SplashDash.Api.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("SplashDash.Api.Models.Admin", b =>
+                {
+                    b.Property<int>("AdminId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("admin_id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("AdminId"));
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("AdminId");
+
+                    b.HasIndex("UserId")
+                        .IsUnique();
+
+                    b.ToTable("admins", (string)null);
+                });
+
             modelBuilder.Entity("SplashDash.Api.Models.Booking", b =>
                 {
-                    b.Property<int>("Id")
+                    b.Property<int>("BookingId")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
+                        .HasColumnType("integer")
+                        .HasColumnName("booking_id");
 
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("BookingId"));
 
-                    b.Property<DateTime>("BookingDate")
-                        .HasColumnType("timestamp with time zone");
+                    b.Property<string>("BookingAddress")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("booking_address");
 
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                    b.Property<DateTimeOffset>("BookingDateTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("booking_datetime");
 
-                    b.Property<int>("CustomerId")
-                        .HasColumnType("integer");
-
-                    b.Property<decimal>("Price")
-                        .HasColumnType("numeric");
-
-                    b.Property<string>("ServiceType")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<string>("Status")
+                    b.Property<string>("BookingStatus")
                         .IsRequired()
                         .HasMaxLength(30)
-                        .HasColumnType("character varying(30)");
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("booking_status");
 
-                    b.Property<string>("VehicleMake")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+                    b.Property<int>("CustomerId")
+                        .HasColumnType("integer")
+                        .HasColumnName("customer_id");
 
-                    b.Property<string>("VehicleModel")
+                    b.Property<string>("LocationType")
                         .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("location_type");
 
-                    b.Property<string>("VehicleRegistration")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+                    b.Property<int>("ServiceId")
+                        .HasColumnType("integer")
+                        .HasColumnName("service_id");
+
+                    b.Property<int?>("StaffId")
+                        .HasColumnType("integer")
+                        .HasColumnName("staff_id");
+
+                    b.Property<decimal>("TotalAmount")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("total_amount");
 
                     b.Property<string>("VehicleType")
                         .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("vehicle_type");
 
-                    b.HasKey("Id");
+                    b.HasKey("BookingId");
 
                     b.HasIndex("CustomerId");
 
-                    b.ToTable("Bookings");
+                    b.HasIndex("ServiceId");
+
+                    b.HasIndex("StaffId");
+
+                    b.ToTable("bookings", (string)null);
                 });
 
             modelBuilder.Entity("SplashDash.Api.Models.Customer", b =>
                 {
-                    b.Property<int>("Id")
+                    b.Property<int>("CustomerId")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
+                        .HasColumnType("integer")
+                        .HasColumnName("customer_id");
 
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("CustomerId"));
 
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Email")
+                    b.Property<string>("HomeAddress")
                         .IsRequired()
-                        .HasMaxLength(150)
-                        .HasColumnType("character varying(150)");
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("home_address");
 
-                    b.Property<string>("FullName")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("user_id");
 
-                    b.Property<string>("PasswordHash")
-                        .IsRequired()
-                        .HasColumnType("text");
+                    b.HasKey("CustomerId");
 
-                    b.HasKey("Id");
+                    b.HasIndex("UserId")
+                        .IsUnique();
 
-                    b.ToTable("Customers");
+                    b.ToTable("customers", (string)null);
                 });
 
-            modelBuilder.Entity("SplashDash.Api.Models.StaffAccount", b =>
+            modelBuilder.Entity("SplashDash.Api.Models.Payment", b =>
                 {
-                    b.Property<int>("Id")
+                    b.Property<int>("PaymentId")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
+                        .HasColumnType("integer")
+                        .HasColumnName("payment_id");
 
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("PaymentId"));
 
-                    b.Property<string>("ContactNumber")
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("amount");
+
+                    b.Property<int>("BookingId")
+                        .HasColumnType("integer")
+                        .HasColumnName("booking_id");
+
+                    b.Property<DateTimeOffset?>("PaidAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("paid_at");
+
+                    b.Property<string>("PaymentMethod")
                         .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)");
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("payment_method");
 
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                    b.Property<string>("PaymentStatus")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("payment_status");
+
+                    b.Property<string>("ReferenceNumber")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("reference_number");
+
+                    b.Property<string>("TransactionId")
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("transaction_id");
+
+                    b.HasKey("PaymentId");
+
+                    b.HasIndex("BookingId")
+                        .IsUnique();
+
+                    b.ToTable("payments", (string)null);
+                });
+
+            modelBuilder.Entity("SplashDash.Api.Models.Service", b =>
+                {
+                    b.Property<int>("ServiceId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("service_id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("ServiceId"));
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text")
+                        .HasColumnName("description");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<decimal>("Price")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("price");
+
+                    b.Property<string>("ServiceName")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("service_name");
+
+                    b.HasKey("ServiceId");
+
+                    b.ToTable("services", (string)null);
+                });
+
+            modelBuilder.Entity("SplashDash.Api.Models.Staff", b =>
+                {
+                    b.Property<int>("StaffId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("staff_id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("StaffId"));
+
+                    b.Property<string>("Gender")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("gender");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("StaffId");
+
+                    b.HasIndex("UserId")
+                        .IsUnique();
+
+                    b.ToTable("staff", (string)null);
+                });
+
+            modelBuilder.Entity("SplashDash.Api.Models.User", b =>
+                {
+                    b.Property<int>("UserId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("user_id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("UserId"));
+
+                    b.Property<string>("AccountType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("account_type");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
 
                     b.Property<string>("Email")
                         .IsRequired()
                         .HasMaxLength(150)
-                        .HasColumnType("character varying(150)");
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("email");
 
-                    b.Property<string>("FullName")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+                    b.Property<string>("FirebaseUid")
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("firebase_uid");
 
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("MustChangePassword")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("PasswordHash")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Role")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<string>("Username")
+                    b.Property<string>("FirstName")
                         .IsRequired()
                         .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("first_name");
 
-                    b.HasKey("Id");
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
 
-                    b.HasIndex("Email")
-                        .IsUnique();
+                    b.Property<string>("PasswordHash")
+                        .HasColumnType("text")
+                        .HasColumnName("password_hash");
 
-                    b.HasIndex("Username")
-                        .IsUnique();
+                    b.Property<string>("PhoneNumber")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("phone_number");
 
-                    b.ToTable("StaffAccounts");
+                    b.Property<string>("Surname")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("surname");
+
+                    b.Property<string>("Username")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("username");
+
+                    b.HasKey("UserId");
+
+                    b.ToTable("users", (string)null);
+                });
+
+            modelBuilder.Entity("SplashDash.Api.Models.Admin", b =>
+                {
+                    b.HasOne("SplashDash.Api.Models.User", "User")
+                        .WithOne("AdminProfile")
+                        .HasForeignKey("SplashDash.Api.Models.Admin", "UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("SplashDash.Api.Models.Booking", b =>
@@ -171,15 +328,87 @@ namespace SplashDash.Api.Migrations
                     b.HasOne("SplashDash.Api.Models.Customer", "Customer")
                         .WithMany("Bookings")
                         .HasForeignKey("CustomerId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("SplashDash.Api.Models.Service", "Service")
+                        .WithMany("Bookings")
+                        .HasForeignKey("ServiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SplashDash.Api.Models.Staff", "Staff")
+                        .WithMany("Bookings")
+                        .HasForeignKey("StaffId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Customer");
+
+                    b.Navigation("Service");
+
+                    b.Navigation("Staff");
+                });
+
+            modelBuilder.Entity("SplashDash.Api.Models.Customer", b =>
+                {
+                    b.HasOne("SplashDash.Api.Models.User", "User")
+                        .WithOne("CustomerProfile")
+                        .HasForeignKey("SplashDash.Api.Models.Customer", "UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("SplashDash.Api.Models.Payment", b =>
+                {
+                    b.HasOne("SplashDash.Api.Models.Booking", "Booking")
+                        .WithOne("Payment")
+                        .HasForeignKey("SplashDash.Api.Models.Payment", "BookingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Booking");
+                });
+
+            modelBuilder.Entity("SplashDash.Api.Models.Staff", b =>
+                {
+                    b.HasOne("SplashDash.Api.Models.User", "User")
+                        .WithOne("StaffProfile")
+                        .HasForeignKey("SplashDash.Api.Models.Staff", "UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("SplashDash.Api.Models.Booking", b =>
+                {
+                    b.Navigation("Payment");
                 });
 
             modelBuilder.Entity("SplashDash.Api.Models.Customer", b =>
                 {
                     b.Navigation("Bookings");
+                });
+
+            modelBuilder.Entity("SplashDash.Api.Models.Service", b =>
+                {
+                    b.Navigation("Bookings");
+                });
+
+            modelBuilder.Entity("SplashDash.Api.Models.Staff", b =>
+                {
+                    b.Navigation("Bookings");
+                });
+
+            modelBuilder.Entity("SplashDash.Api.Models.User", b =>
+                {
+                    b.Navigation("AdminProfile");
+
+                    b.Navigation("CustomerProfile");
+
+                    b.Navigation("StaffProfile");
                 });
 #pragma warning restore 612, 618
         }

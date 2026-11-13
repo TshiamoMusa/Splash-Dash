@@ -216,9 +216,9 @@ CREATE TABLE payments (
 INSERT INTO services
     (service_name, description, price, is_active)
 VALUES
-    ('External', 'Exterior vehicle wash', 0.00, FALSE),
-    ('Internal', 'Interior vehicle cleaning', 0.00, FALSE),
-    ('Full', 'Interior and exterior vehicle cleaning', 0.00, FALSE);
+    ('External Wash', 'Exterior vehicle wash', 150.00, TRUE),
+    ('Interior Cleaning', 'Interior vehicle cleaning', 200.00, TRUE),
+    ('Full Detail', 'Interior and exterior vehicle cleaning', 350.00, TRUE);
 
 
 -- ============================================

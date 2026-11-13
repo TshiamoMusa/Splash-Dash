@@ -4,23 +4,6 @@
             "outputFile": "com.example.splashanddash.app-mergeDebugResources-48:/values-et/values-et.xml",
             "map": [
                 {
-                    "source": "C:\\Users\\Student\\.gradle\\caches\\8.10.2\\transforms\\38176ab3f29cb8fbb8b680b305c54798\\transformed\\play-services-basement-18.8.0\\res\\values-et\\values.xml",
-                    "from": {
-                        "startLines": "4",
-                        "startColumns": "0",
-                        "startOffsets": "218",
-                        "endColumns": "135",
-                        "endOffsets": "353"
-                    },
-                    "to": {
-                        "startLines": "58",
-                        "startColumns": "4",
-                        "startOffsets": "5712",
-                        "endColumns": "139",
-                        "endOffsets": "5847"
-                    }
-                },
-                {
                     "source": "C:\\Users\\Student\\.gradle\\caches\\8.10.2\\transforms\\9ec70f3890699d5992d42c2a6d700a14\\transformed\\credentials-1.5.0\\res\\values-et\\values-et.xml",
                     "from": {
                         "startLines": "2,3",
@@ -54,6 +37,23 @@
                         "endLines": "5,35,36,37,38,39,47,48,49,71,72,73,87,88,89,90,91,92,93,94,95,96,97,98,99,100,101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119,120,121,122,123,124,125,126,127,128,129,130,131,132,133,134,135,136,137,138,139,140,141,142,143,144,145,146,147,149,150,151",
                         "endColumns": "12,79,78,84,91,86,98,116,81,59,63,84,67,63,86,63,63,58,71,63,53,118,59,60,53,72,132,83,76,92,79,92,137,79,78,125,87,78,54,50,65,72,78,70,78,72,74,73,71,112,87,76,90,91,73,73,90,53,81,68,82,85,61,63,62,67,102,102,96,100,58,54,80,88,76,77",
                         "endOffsets": "311,3339,3418,3503,3595,3682,4510,4627,4709,7285,7349,7434,9065,9129,9216,9280,9344,9403,9475,9539,9593,9712,9772,9833,9887,9960,10093,10177,10254,10347,10427,10520,10658,10738,10817,10943,11031,11110,11165,11216,11282,11355,11434,11505,11584,11657,11732,11806,11878,11991,12079,12156,12247,12339,12413,12487,12578,12632,12714,12783,12866,12952,13014,13078,13141,13209,13312,13415,13512,13613,13672,13727,13808,13980,14057,14135"
+                    }
+                },
+                {
+                    "source": "C:\\Users\\Student\\.gradle\\caches\\8.10.2\\transforms\\090a4969bb637edd8a7c9499fcfd0277\\transformed\\play-services-basement-18.4.0\\res\\values-et\\values.xml",
+                    "from": {
+                        "startLines": "4",
+                        "startColumns": "0",
+                        "startOffsets": "195",
+                        "endColumns": "135",
+                        "endOffsets": "330"
+                    },
+                    "to": {
+                        "startLines": "58",
+                        "startColumns": "4",
+                        "startOffsets": "5712",
+                        "endColumns": "139",
+                        "endOffsets": "5847"
                     }
                 },
                 {

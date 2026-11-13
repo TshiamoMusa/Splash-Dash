@@ -53,11 +53,8 @@ dependencies {
     // Firebase Bill of Materials
     implementation platform('com.google.firebase:firebase-bom:34.4.0')
 
-    // Firebase Authentication
+    // Firebase Authentication (Used strictly for Google Sign-In)
     implementation 'com.google.firebase:firebase-auth'
-
-    // Cloud Firestore
-    implementation 'com.google.firebase:firebase-firestore'
 
     // Google Sign-In
     implementation 'androidx.credentials:credentials:1.5.0'

@@ -359,12 +359,81 @@ public class AuthController : ControllerBase
             }
         };
     }
+
+    // Google login / sync for Customers.
+    [AllowAnonymous]
+    [HttpPost("google-login")]
+    public async Task<IActionResult> GoogleLogin(GoogleLoginRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Email))
+        {
+            return BadRequest(new { message = "Email is required for Google login." });
+        }
+
+        string email = request.Email.Trim().ToLowerInvariant();
+
+        var account = await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == email);
+
+        if (account == null)
+        {
+            string fullName = string.IsNullOrWhiteSpace(request.Name) ? "Customer User" : request.Name.Trim();
+            string firstName = fullName;
+            string surname = "Customer";
+            int lastSpace = fullName.LastIndexOf(' ');
+            if (lastSpace > 0)
+            {
+                firstName = fullName.Substring(0, lastSpace);
+                surname = fullName.Substring(lastSpace + 1);
+            }
+
+            account = new User
+            {
+                FirstName = firstName,
+                Surname = surname,
+                Email = email,
+                PhoneNumber = request.PhoneNumber ?? string.Empty,
+                FirebaseUid = request.FirebaseUid,
+                AccountType = "Customer",
+                IsActive = true,
+                CreatedAt = DateTimeOffset.UtcNow
+            };
+
+            var customer = new Customer
+            {
+                User = account,
+                HomeAddress = request.Address ?? string.Empty
+            };
+
+            _context.Users.Add(account);
+            _context.Customers.Add(customer);
+            await _context.SaveChangesAsync();
+        }
+        else
+        {
+            if (!string.IsNullOrWhiteSpace(request.FirebaseUid))
+            {
+                account.FirebaseUid = request.FirebaseUid;
+                await _context.SaveChangesAsync();
+            }
+        }
+
+        return Ok(CreateLoginResponse(account));
+    }
 }
 
 public class LoginRequest
 {
     public string Identifier { get; set; } = string.Empty;
     public string Password { get; set; } = string.Empty;
+}
+
+public class GoogleLoginRequest
+{
+    public string Email { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string? PhoneNumber { get; set; }
+    public string? Address { get; set; }
+    public string? FirebaseUid { get; set; }
 }
 
 public class ChangePasswordRequest

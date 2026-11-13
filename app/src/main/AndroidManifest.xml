@@ -2,6 +2,8 @@
 
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <application
         android:name=".SplashDashApplication"
         android:allowBackup="true"
@@ -9,6 +11,7 @@
         android:label="SplashDash"
         android:roundIcon="@drawable/splash_dash_logo"
         android:supportsRtl="true"
+        android:usesCleartextTraffic="true"
         android:theme="@style/Theme.SplashDash">
 
         <!-- Splash Screen -->

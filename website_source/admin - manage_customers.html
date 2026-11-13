@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -7,6 +7,8 @@
     <title>Manage Customers - Splash &amp; Dash Admin Portal</title>
     <link rel="stylesheet" href="css/base.css">
     <link rel="stylesheet" href="css/admin.css">
+    <script src="js/portal-auth.js"></script>
+    <script>Portal.requireRole("Admin");</script>
 </head>
 <body>
 
@@ -18,6 +20,8 @@
         - Admins can deactivate or reactivate accounts. Deactivating must not remove booking history.
         - A customer's bookings are managed on the Bookings page.
         - Staff have no access to this page.
+        - The customer list is not connected yet: the API needs an admin endpoint that lists customers
+          and can deactivate/reactivate them.
     -->
 
     <header class="admin-header">
@@ -29,9 +33,9 @@
             </div>
 
             <div class="admin-profile">
-                <span>Welcome, <span id="adminName"><!-- Backend: display the logged-in admin's name --></span></span>
+                <span>Welcome, <span id="adminName"></span></span>
                 <a href="change_password.html">Change Password</a>
-                <!-- Backend: Logout must end the session/token, then go to the public home page -->
+                <!-- Logout is handled by js/portal-auth.js: it ends the session, then goes to the public home page -->
                 <a href="index.html">Logout</a>
             </div>
         </div>
@@ -175,5 +179,6 @@
         <p>&copy; 2026 Splash &amp; Dash Car Wash Management System</p>
     </footer>
 
+    <script src="js/portal-pages.js"></script>
 </body>
 </html>

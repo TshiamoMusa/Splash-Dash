@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -7,6 +7,8 @@
     <title>Manage Staff - Splash &amp; Dash Admin Portal</title>
     <link rel="stylesheet" href="css/base.css">
     <link rel="stylesheet" href="css/admin.css">
+    <script src="js/portal-auth.js"></script>
+    <script>Portal.requireRole("Admin");</script>
 </head>
 <body>
 
@@ -15,7 +17,7 @@
         - ACCESS: Admin role only. The API must check the logged-in role on every request.
           Hiding the link is not security.
         - Staff cannot register themselves: admins create every account with a TEMPORARY password.
-        - New accounts must set their own password at first login (MustChangePassword = true).
+        - Staff may change the temporary password later from "Change Password", but it is optional.
         - The login is the username. Email is for contact and password resets.
         - An admin cannot deactivate themselves or the last active admin.
     -->
@@ -29,9 +31,9 @@
             </div>
 
             <div class="admin-profile">
-                <span>Welcome, <span id="adminName"><!-- Backend: display the logged-in admin's name --></span></span>
+                <span>Welcome, <span id="adminName"></span></span>
                 <a href="change_password.html">Change Password</a>
-                <!-- Backend: Logout must end the session/token, then go to the public home page -->
+                <!-- Logout is handled by js/portal-auth.js: it ends the session, then goes to the public home page -->
                 <a href="index.html">Logout</a>
             </div>
         </div>
@@ -86,17 +88,28 @@
                 <p>Create a new staff account for the management system.</p>
             </div>
 
-            <!-- Backend: create the account, securely hash the temporary password and set MustChangePassword = true.
-                 Username must be unique. -->
+            <!-- Backend (not connected yet): create the account and securely hash the temporary password.
+                 First name and surname are stored separately. Username must be unique.
+                 Needs a staff endpoint in the API. -->
             <form method="POST" class="staff-form" id="add-staff-form">
 
                 <div class="form-group">
-                    <label for="full-name">Full Name</label>
+                    <label for="first-name">Name</label>
                     <input
                         type="text"
-                        id="full-name"
-                        name="full_name"
-                        placeholder="Enter full name"
+                        id="first-name"
+                        name="first_name"
+                        placeholder="Enter name"
+                        required>
+                </div>
+
+                <div class="form-group">
+                    <label for="surname">Surname</label>
+                    <input
+                        type="text"
+                        id="surname"
+                        name="surname"
+                        placeholder="Enter surname"
                         required>
                 </div>
 
@@ -151,7 +164,7 @@
                         minlength="8"
                         autocomplete="off"
                         required>
-                    <p class="form-hint">Give this to the staff member. They must change it the first time they log in.</p>
+                    <p class="form-hint">Give this to the staff member. They can change it later from "Change Password" if they want to.</p>
                 </div>
 
                 <button type="submit" name="add_staff">
@@ -226,7 +239,7 @@
                             <td><!-- Active / Inactive --></td>
                             <td>
                                 <div class="row-actions">
-                                    <!-- Backend: set a new temporary password; the staff member must change it at next login -->
+                                    <!-- Backend: set a new temporary password; the staff member may change it later if they want to -->
                                     <details>
                                         <summary>Reset password</summary>
                                         <form method="POST">
@@ -279,5 +292,6 @@
         <p>&copy; 2026 Splash &amp; Dash Car Wash Management System</p>
     </footer>
 
+    <script src="js/portal-pages.js"></script>
 </body>
 </html>

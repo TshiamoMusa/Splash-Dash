@@ -103,6 +103,73 @@ public class CustomersController : ControllerBase
         });
     }
 
+    // Admins can view all registered customers.
+    [Authorize(Roles = "Admin")]
+    [HttpGet("all")]
+    public async Task<IActionResult> GetAllCustomers()
+    {
+        var customers = await _context.Customers
+            .Include(c => c.User)
+            .Where(c => c.User != null &&
+                        c.User.AccountType == "Customer")
+            .OrderBy(c => c.User!.FirstName)
+            .Select(c => new
+            {
+                customerId = c.CustomerId,
+                firstName = c.User!.FirstName,
+                surname = c.User.Surname,
+                fullName = c.User.FirstName + " " + c.User.Surname,
+                email = c.User.Email,
+                phoneNumber = c.User.PhoneNumber,
+                totalBookings = _context.Bookings.Count(
+                    b => b.CustomerId == c.CustomerId),
+                isActive = c.User.IsActive,
+                accountStatus = c.User.IsActive
+                    ? "Active"
+                    : "Inactive"
+            })
+            .ToListAsync();
+
+        return Ok(customers);
+    }
+
+    // Admins can activate or deactivate customer accounts.
+    [Authorize(Roles = "Admin")]
+    [HttpPut("{id:int}/status")]
+    public async Task<IActionResult> UpdateCustomerStatus(
+        int id,
+        UpdateCustomerStatusRequest request)
+    {
+        var customer = await _context.Customers
+            .Include(c => c.User)
+            .FirstOrDefaultAsync(c => c.CustomerId == id);
+
+        if (customer?.User == null ||
+            customer.User.AccountType != "Customer")
+        {
+            return NotFound(new
+            {
+                message = "Customer account not found."
+            });
+        }
+
+        customer.User.IsActive = request.IsActive;
+
+        await _context.SaveChangesAsync();
+
+        return Ok(new
+        {
+            message = request.IsActive
+                ? "Customer account activated successfully."
+                : "Customer account deactivated successfully.",
+            customerId = customer.CustomerId,
+            isActive = customer.User.IsActive,
+            accountStatus = customer.User.IsActive
+                ? "Active"
+                : "Inactive"
+        });
+    }
+
     // Returns the logged-in customer's profile.
     [Authorize(Roles = "Customer")]
     [HttpGet("profile")]
@@ -197,4 +264,9 @@ public class RegisterCustomerRequest
 public class UpdateCustomerAddressRequest
 {
     public string HomeAddress { get; set; } = string.Empty;
+}
+
+public class UpdateCustomerStatusRequest
+{
+    public bool IsActive { get; set; }
 }

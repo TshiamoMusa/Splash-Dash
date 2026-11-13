@@ -1,5 +1,4 @@
-﻿
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -102,16 +101,17 @@ public class AuthController : ControllerBase
         return Ok(CreateLoginResponse(account));
     }
 
-    // Creates the first Admin account during local development.
+    // Creates the first Admin account.
     [AllowAnonymous]
     [HttpPost("bootstrap-admin")]
     public async Task<IActionResult> BootstrapAdmin(
         BootstrapAdminRequest request)
     {
-        if (!_environment.IsDevelopment())
-        {
-            return NotFound();
-        }
+        // Temporarily allowed in production to seed the first admin account
+        // if (!_environment.IsDevelopment())
+        // {
+        //     return NotFound();
+        // }
 
         string? configuredKey = _configuration["Bootstrap:AdminKey"];
         string? suppliedKey = Request.Headers["X-Bootstrap-Key"].FirstOrDefault();

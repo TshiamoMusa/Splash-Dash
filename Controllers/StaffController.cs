@@ -1,4 +1,3 @@
-
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -6,11 +5,12 @@ using Microsoft.EntityFrameworkCore;
 using SplashDash.Api.Data;
 using SplashDash.Api.Models;
 using System.Security.Claims;
+using System.Text.RegularExpressions;
 
 namespace SplashDash.Api.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/staff")]
 [Authorize(Roles = "Admin")]
 public class StaffController : ControllerBase
 {
@@ -22,7 +22,54 @@ public class StaffController : ControllerBase
         _context = context;
     }
 
-    // GET: api/Staff/all
+    private bool TryFormatAndValidateName(string input, out string formattedName)
+    {
+        formattedName = string.Empty;
+        if (string.IsNullOrWhiteSpace(input)) return false;
+
+        string[] parts = input.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var formattedParts = new List<string>();
+
+        foreach (var part in parts)
+        {
+            if (part.Length < 3) return false;
+            foreach (char c in part)
+            {
+                if (!char.IsLetter(c)) return false;
+            }
+            // Auto-capitalize first letter, lowercase the rest
+            string formattedPart = char.ToUpper(part[0]) + part.Substring(1).ToLower();
+            formattedParts.Add(formattedPart);
+        }
+
+        formattedName = string.Join(" ", formattedParts);
+        return true;
+    }
+
+    private bool IsValidUsername(string username)
+    {
+        if (string.IsNullOrWhiteSpace(username) || username.Length < 3) return false;
+        // Alphanumeric, underscores, hyphens only, no spaces
+        return Regex.IsMatch(username.Trim(), @"^[a-zA-Z0-9_\-]+$");
+    }
+
+    private bool IsValidPhoneNumber(string phone)
+    {
+        if (string.IsNullOrWhiteSpace(phone)) return false;
+        // Allows digits, spaces, hyphens, and a leading plus sign
+        return Regex.IsMatch(phone.Trim(), @"^\+?[0-9\s\-]{8,15}$");
+    }
+
+    private bool IsStrongPassword(string password)
+    {
+        if (string.IsNullOrWhiteSpace(password) || password.Length < 8) return false;
+        bool hasUpper = password.Any(char.IsUpper);
+        bool hasLower = password.Any(char.IsLower);
+        bool hasDigit = password.Any(char.IsDigit);
+        return hasUpper && hasLower && hasDigit;
+    }
+
+    // GET: api/staff/all
     [HttpGet("all")]
     public async Task<IActionResult> GetAllAccounts()
     {
@@ -50,7 +97,7 @@ public class StaffController : ControllerBase
         return Ok(accounts);
     }
 
-    // POST: api/Staff
+    // POST: api/staff
     [HttpPost]
     public async Task<IActionResult> CreateAccount(CreateStaffAccountRequest request)
     {
@@ -65,11 +112,35 @@ public class StaffController : ControllerBase
             return BadRequest(new { message = "All fields are required." });
         }
 
-        if (request.Password.Length < 8)
+        // Validate and auto-capitalize names
+        if (!TryFormatAndValidateName(request.FirstName, out string formattedFirstName))
+        {
+            return BadRequest(new { message = "First name must contain only letters, have at least 3 letters per word, and start with a capital letter." });
+        }
+
+        if (!TryFormatAndValidateName(request.Surname, out string formattedSurname))
+        {
+            return BadRequest(new { message = "Surname must contain only letters, have at least 3 letters per word, and start with a capital letter." });
+        }
+
+        // Validate Username
+        if (!IsValidUsername(request.Username))
+        {
+            return BadRequest(new { message = "Username must be at least 3 characters long and contain only letters, numbers, underscores, or hyphens (no spaces)." });
+        }
+
+        // Validate Phone Number
+        if (!IsValidPhoneNumber(request.PhoneNumber))
+        {
+            return BadRequest(new { message = "Please enter a valid phone number (8 to 15 digits/characters)." });
+        }
+
+        // Validate Password strength
+        if (!IsStrongPassword(request.Password))
         {
             return BadRequest(new
             {
-                message = "Temporary password must contain at least 8 characters."
+                message = "Password must be at least 8 characters long and include at least one uppercase letter, one lowercase letter, and one number."
             });
         }
 
@@ -97,8 +168,8 @@ public class StaffController : ControllerBase
 
         var user = new User
         {
-            FirstName = request.FirstName.Trim(),
-            Surname = request.Surname.Trim(),
+            FirstName = formattedFirstName,
+            Surname = formattedSurname,
             Email = email,
             PhoneNumber = request.PhoneNumber.Trim(),
             Username = username,
@@ -149,7 +220,7 @@ public class StaffController : ControllerBase
             });
     }
 
-    // PUT: api/Staff/{id}/status
+    // PUT: api/staff/{id}/status
     [HttpPut("{id:int}/status")]
     public async Task<IActionResult> UpdateAccountStatus(
         int id,
@@ -204,7 +275,7 @@ public class StaffController : ControllerBase
         });
     }
 
-    // PUT: api/Staff/{id}/password
+    // PUT: api/staff/{id}/password
     [HttpPut("{id:int}/password")]
     public async Task<IActionResult> ResetAccountPassword(
         int id,
@@ -215,11 +286,11 @@ public class StaffController : ControllerBase
             return BadRequest(new { message = "A new password is required." });
         }
 
-        if (request.NewPassword.Length < 8)
+        if (!IsStrongPassword(request.NewPassword))
         {
             return BadRequest(new
             {
-                message = "Password must contain at least 8 characters."
+                message = "Password must be at least 8 characters long and include at least one uppercase letter, one lowercase letter, and one number."
             });
         }
 

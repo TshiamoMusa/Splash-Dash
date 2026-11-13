@@ -1,4 +1,3 @@
-
 document.addEventListener("DOMContentLoaded", function () {
     const addForm = document.getElementById("add-staff-form");
     const filterForm = document.getElementById("staff-filter-form");
@@ -34,13 +33,15 @@ document.addEventListener("DOMContentLoaded", function () {
         addButton.textContent = "Creating account...";
 
         try {
-            const result = await Portal.post("/Staff", account);
+            const result = await Portal.post("/staff", account);
 
             addForm.reset();
             showMessage(result.message || "Account created successfully.", "success");
+            window.scrollTo({ top: 0, behavior: "smooth" });
             await loadAccounts();
         } catch (error) {
             showMessage(error.message, "error");
+            window.scrollTo({ top: 0, behavior: "smooth" });
         } finally {
             addButton.disabled = false;
             addButton.textContent = "Add Staff Member";
@@ -75,6 +76,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
         if (newPassword.length < 8) {
             showMessage("The new password must contain at least 8 characters.", "error");
+            window.scrollTo({ top: 0, behavior: "smooth" });
             return;
         }
 
@@ -84,15 +86,17 @@ document.addEventListener("DOMContentLoaded", function () {
 
         try {
             const result = await Portal.put(
-                "/Staff/" + accountId + "/password",
+                "/staff/" + accountId + "/password",
                 { newPassword: newPassword }
             );
 
             form.reset();
             showMessage(result.message || "Password reset successfully.", "success");
+            window.scrollTo({ top: 0, behavior: "smooth" });
             form.closest("details").open = false;
         } catch (error) {
             showMessage(error.message, "error");
+            window.scrollTo({ top: 0, behavior: "smooth" });
         } finally {
             button.disabled = false;
             button.textContent = "Reset";
@@ -124,14 +128,16 @@ document.addEventListener("DOMContentLoaded", function () {
 
         try {
             const result = await Portal.put(
-                "/Staff/" + accountId + "/status",
+                "/staff/" + accountId + "/status",
                 { isActive: activating }
             );
 
             showMessage(result.message || "Account status updated.", "success");
+            window.scrollTo({ top: 0, behavior: "smooth" });
             await loadAccounts();
         } catch (error) {
             showMessage(error.message, "error");
+            window.scrollTo({ top: 0, behavior: "smooth" });
             button.disabled = false;
         }
     });
@@ -140,7 +146,7 @@ document.addEventListener("DOMContentLoaded", function () {
         records.innerHTML = "<tr><td colspan='8'>Loading accounts...</td></tr>";
 
         try {
-            const result = await Portal.get("/Staff/all");
+            const result = await Portal.get("/staff/all");
 
             if (!Array.isArray(result)) {
                 throw new Error("The API returned an unexpected account list.");

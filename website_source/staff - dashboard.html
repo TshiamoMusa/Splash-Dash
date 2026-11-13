@@ -1,4 +1,5 @@
-﻿<!DOCTYPE html>
+﻿
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -9,15 +10,9 @@
     <link rel="stylesheet" href="css/staff.css">
     <script src="js/portal-auth.js"></script>
     <script>Portal.requireRole("Staff");</script>
+    <script src="js/staff-dashboard.js" defer></script>
 </head>
 <body>
-
-    <!--
-        NOTES FOR THE TEAM (see BACKEND_NOTES.md for the full list)
-        - ACCESS: Staff role only. The API must check the logged-in role on every request.
-          Hiding the link is not security.
-        - Counts below are for TODAY only. All staff share one queue (bookings are not assigned per person).
-    -->
 
     <header class="staff-header">
         <div class="header-content">
@@ -28,9 +23,8 @@
             </div>
 
             <div class="staff-profile">
-                <span>Welcome, <span id="staffName"><!-- Backend: display the logged-in staff's name --></span></span>
+                <span>Welcome, <span id="staffName"></span></span>
                 <a href="change_password.html">Change Password</a>
-                <!-- Backend: Logout must end the session/token, then go to the public home page -->
                 <a href="index.html">Logout</a>
             </div>
         </div>
@@ -49,25 +43,21 @@
             <div class="dashboard-cards">
 
                 <div class="dashboard-card">
-                    <!-- Backend: count today's bookings with status Pending -->
                     <strong id="pendingBookings">--</strong>
                     <p>Pending Today</p>
                 </div>
 
                 <div class="dashboard-card">
-                    <!-- Backend: count today's bookings with status In Progress -->
                     <strong id="inProgressBookings">--</strong>
                     <p>In Progress</p>
                 </div>
 
                 <div class="dashboard-card">
-                    <!-- Backend: count today's bookings with status Completed -->
                     <strong id="completedToday">--</strong>
                     <p>Completed Today</p>
                 </div>
 
                 <div class="dashboard-card">
-                    <!-- Backend: count today's bookings with booking type House Call -->
                     <strong id="houseCallsToday">--</strong>
                     <p>House Calls Today</p>
                 </div>
@@ -94,14 +84,9 @@
                     </thead>
 
                     <tbody id="next-up">
-
-                        <!-- Backend: display today's bookings ordered by time. Leave out Cancelled bookings. -->
                         <tr>
-                            <td colspan="6">
-                                Today's bookings will appear here.
-                            </td>
+                            <td colspan="6">Loading today's bookings...</td>
                         </tr>
-
                     </tbody>
 
                 </table>

@@ -45,7 +45,7 @@ class CustomerDashboardActivity : BaseActivity() {
                 if (result.isSuccess) {
                     val bookings = result.getOrNull() ?: emptyList()
                     val totalBookings = bookings.size
-                    val pendingBookings = bookings.count { it.bookingStatus.equals("Pending", ignoreCase = true) }
+                    val pendingBookings = bookings.count { it.bookingStatus.equals("Pending", ignoreCase = true) || it.bookingStatus.equals("Confirmed", ignoreCase = true) }
                     val completedBookings = bookings.count { it.bookingStatus.equals("Completed", ignoreCase = true) }
 
                     showDashboard(
@@ -77,140 +77,133 @@ class CustomerDashboardActivity : BaseActivity() {
 
         val customerName = AppData.currentUser
             .takeIf { it.isNotBlank() && it != "Guest" }
-            ?: "Customer"
+            ?: "Valued Customer"
 
-        // DASHBOARD HEADER
+        // STYLISH HEADER BANNER
         main.addView(
             sectionTitle(
-                "Customer Dashboard",
-                "Welcome back, $customerName"
+                "🚗 SplashDash Member Portal",
+                "Welcome back, $customerName!\nProfessional car wash & detailing services."
             )
         )
 
-        // ACTIVITY SECTION
+        // LIVE STATS SECTION
         main.addView(
             text(
-                "Your Activity",
+                "📊 Live Account Metrics",
                 20f,
                 true
             )
         )
 
-        val totalText = total?.toString() ?: "—"
-        val pendingText = pending?.toString() ?: "—"
-        val completedText = completed?.toString() ?: "—"
+        val totalText = total?.toString() ?: "..."
+        val pendingText = pending?.toString() ?: "..."
+        val completedText = completed?.toString() ?: "..."
 
         main.addView(
             card(
-                "Total Bookings",
-                totalText
+                "📁 Total Bookings",
+                "You have made $totalText total bookings with us."
             )
         )
 
         main.addView(
             card(
-                "Pending Bookings",
-                pendingText
+                "⏳ Active / Pending Bookings",
+                "$pendingText bookings currently awaiting service or confirmation."
             )
         )
 
         main.addView(
             card(
-                "Completed Services",
-                completedText
+                "✨ Completed Washes",
+                "$completedText vehicles successfully washed and detailed."
             )
         )
 
         if (error != null) {
             main.addView(
                 text(
-                    "Unable to load booking statistics: $error",
+                    "⚠️ Database Sync Notice: $error",
                     14f
                 )
             )
 
             main.addView(
-                outlineButton("RETRY") {
+                outlineButton("🔄 RETRY SYNC") {
                     loadDashboardStatistics()
                 }
             )
-        } else if (total == null) {
-            main.addView(
-                text(
-                    "Loading your booking statistics...",
-                    14f
-                )
-            )
         }
 
-        // CUSTOMER ACTIONS
+        // STYLISH QUICK ACTIONS
         main.addView(
             sectionTitle(
-                "What would you like to do?",
-                "Manage your vehicle cleaning services"
+                "⚡ Quick Actions",
+                "Schedule, manage, and pay for services in seconds"
             )
         )
 
         main.addView(
             card(
-                "Book a Service",
-                "Choose a car wash package and select a convenient date and time."
+                "✨ Book a New Service",
+                "Choose from our premium Exterior, Interior, or Full Detail car wash packages."
             )
         )
 
         main.addView(
-            button("BOOK A SERVICE") {
+            button("📅 BOOK A CAR WASH NOW") {
                 go(BookingActivity::class.java)
             }
         )
 
         main.addView(
             card(
-                "My Bookings",
-                "View your booking history and track the status of your services."
+                "📝 Manage Bookings (Edit & Cancel)",
+                "View your history, update vehicle/date details on pending bookings, or cancel anytime."
             )
         )
 
         main.addView(
-            button("VIEW MY BOOKINGS") {
+            button("🔍 VIEW & EDIT MY BOOKINGS") {
                 go(BookingHistoryActivity::class.java)
             }
         )
 
         main.addView(
             card(
-                "Payments",
-                "View booking payment information and submit payment requests."
+                "💳 Secure Checkout",
+                "Complete encrypted payments via PayFast, EFT, or Cash for pending bookings."
             )
         )
 
         main.addView(
-            button("PAYMENTS") {
+            button("🔒 PROCEED TO SECURE CHECKOUT") {
                 go(PaymentActivity::class.java)
             }
         )
 
         main.addView(
             card(
-                "Account Settings",
-                "Manage your account and application preferences."
+                "⚙️ Account & Profile Settings",
+                "Update your home address, phone number, and account preferences."
             )
         )
 
         main.addView(
-            outlineButton("SETTINGS") {
+            outlineButton("SETTINGS & PROFILE") {
                 go(SettingsActivity::class.java)
             }
         )
 
         main.addView(
-            outlineButton("REFRESH DASHBOARD") {
+            outlineButton("🔄 REFRESH DASHBOARD") {
                 loadDashboardStatistics()
             }
         )
 
         main.addView(
-            outlineButton("LOG OUT") {
+            outlineButton("🚪 LOG OUT") {
                 ApiClient.clearSession(this@CustomerDashboardActivity)
 
                 go(LoginActivity::class.java)

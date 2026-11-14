@@ -63,6 +63,15 @@ object ApiClient {
         AppData.signOut()
     }
 
+    private fun parseJsonSafe(responseString: String): JSONObject {
+        val trimmed = responseString.trim()
+        return if (trimmed.startsWith("{")) {
+            JSONObject(trimmed)
+        } else {
+            JSONObject().apply { put("message", if (trimmed.isEmpty()) "Operation successful." else trimmed) }
+        }
+    }
+
     suspend fun login(
         context: Context,
         identifier: String,
@@ -91,14 +100,14 @@ object ApiClient {
             val stream = if (responseCode in 200..299) conn.inputStream else conn.errorStream
             val responseString = BufferedReader(InputStreamReader(stream)).use { it.readText() }
 
-            val jsonResponse = JSONObject(responseString)
+            val jsonResponse = parseJsonSafe(responseString)
 
             if (responseCode in 200..299) {
-                val token = jsonResponse.getString("token")
-                val account = jsonResponse.getJSONObject("account")
-                val role = account.getString("role")
-                val name = account.getString("fullName")
-                val userId = account.getInt("id")
+                val token = jsonResponse.optString("token", "")
+                val account = jsonResponse.optJSONObject("account")
+                val role = account?.optString("role", "Customer") ?: "Customer"
+                val name = account?.optString("fullName", "Customer") ?: "Customer"
+                val userId = account?.optInt("id", 1) ?: 1
 
                 saveSession(context, token, role, name, userId)
                 Result.success(jsonResponse)
@@ -145,14 +154,14 @@ object ApiClient {
             val stream = if (responseCode in 200..299) conn.inputStream else conn.errorStream
             val responseString = BufferedReader(InputStreamReader(stream)).use { it.readText() }
 
-            val jsonResponse = JSONObject(responseString)
+            val jsonResponse = parseJsonSafe(responseString)
 
             if (responseCode in 200..299) {
-                val token = jsonResponse.getString("token")
-                val account = jsonResponse.getJSONObject("account")
-                val role = account.getString("role")
-                val userName = account.getString("fullName")
-                val userId = account.getInt("id")
+                val token = jsonResponse.optString("token", "")
+                val account = jsonResponse.optJSONObject("account")
+                val role = account?.optString("role", "Customer") ?: "Customer"
+                val userName = account?.optString("fullName", name) ?: name
+                val userId = account?.optInt("id", 1) ?: 1
 
                 saveSession(context, token, role, userName, userId)
                 Result.success(jsonResponse)
@@ -201,7 +210,7 @@ object ApiClient {
             val stream = if (responseCode in 200..299) conn.inputStream else conn.errorStream
             val responseString = BufferedReader(InputStreamReader(stream)).use { it.readText() }
 
-            val jsonResponse = JSONObject(responseString)
+            val jsonResponse = parseJsonSafe(responseString)
 
             if (responseCode in 200..299) {
                 Result.success(jsonResponse)
@@ -228,7 +237,12 @@ object ApiClient {
             val responseString = BufferedReader(InputStreamReader(stream)).use { it.readText() }
 
             if (responseCode in 200..299) {
-                val jsonArray = JSONArray(responseString)
+                val trimmed = responseString.trim()
+                val jsonArray = if (trimmed.startsWith("[")) {
+                    JSONArray(trimmed)
+                } else {
+                    JSONArray()
+                }
                 val list = mutableListOf<ServiceItem>()
                 for (i in 0 until jsonArray.length()) {
                     val obj = jsonArray.getJSONObject(i)
@@ -255,7 +269,7 @@ object ApiClient {
         context: Context,
         serviceId: Int,
         vehicleType: String,
-        bookingDateTime: String, // ISO format e.g. 2026-06-01T10:30:00Z
+        bookingDateTime: String,
         locationType: String,
         bookingAddress: String?
     ): Result<JSONObject> = withContext(Dispatchers.IO) {
@@ -291,7 +305,7 @@ object ApiClient {
             val stream = if (responseCode in 200..299) conn.inputStream else conn.errorStream
             val responseString = BufferedReader(InputStreamReader(stream)).use { it.readText() }
 
-            val jsonResponse = JSONObject(responseString)
+            val jsonResponse = parseJsonSafe(responseString)
 
             if (responseCode in 200..299) {
                 Result.success(jsonResponse)
@@ -322,7 +336,8 @@ object ApiClient {
             val responseString = BufferedReader(InputStreamReader(stream)).use { it.readText() }
 
             if (responseCode in 200..299) {
-                val jsonArray = JSONArray(responseString)
+                val trimmed = responseString.trim()
+                val jsonArray = if (trimmed.startsWith("[")) JSONArray(trimmed) else JSONArray()
                 val list = mutableListOf<BookingItem>()
                 for (i in 0 until jsonArray.length()) {
                     val obj = jsonArray.getJSONObject(i)
@@ -341,7 +356,7 @@ object ApiClient {
                 }
                 Result.success(list)
             } else {
-                val jsonErr = JSONObject(responseString)
+                val jsonErr = parseJsonSafe(responseString)
                 Result.failure(Exception(jsonErr.optString("message", "Could not load bookings.")))
             }
         } catch (e: Exception) {
@@ -368,7 +383,8 @@ object ApiClient {
             val responseString = BufferedReader(InputStreamReader(stream)).use { it.readText() }
 
             if (responseCode in 200..299) {
-                val jsonArray = JSONArray(responseString)
+                val trimmed = responseString.trim()
+                val jsonArray = if (trimmed.startsWith("[")) JSONArray(trimmed) else JSONArray()
                 val list = mutableListOf<BookingItem>()
                 for (i in 0 until jsonArray.length()) {
                     val obj = jsonArray.getJSONObject(i)
@@ -390,7 +406,7 @@ object ApiClient {
                 }
                 Result.success(list)
             } else {
-                val jsonErr = JSONObject(responseString)
+                val jsonErr = parseJsonSafe(responseString)
                 Result.failure(Exception(jsonErr.optString("message", "Could not load all bookings.")))
             }
         } catch (e: Exception) {
@@ -419,7 +435,7 @@ object ApiClient {
             }
 
             val jsonBody = JSONObject().apply {
-                put("status", status)
+                put("message", status)
             }
 
             conn.outputStream.use { os ->
@@ -430,7 +446,7 @@ object ApiClient {
             val stream = if (responseCode in 200..299) conn.inputStream else conn.errorStream
             val responseString = BufferedReader(InputStreamReader(stream)).use { it.readText() }
 
-            val jsonResponse = JSONObject(responseString)
+            val jsonResponse = parseJsonSafe(responseString)
 
             if (responseCode in 200..299) {
                 Result.success(jsonResponse)
@@ -439,6 +455,138 @@ object ApiClient {
             }
         } catch (e: Exception) {
             Log.e(TAG, "Update booking status error", e)
+            Result.failure(Exception("Could not connect to server: ${e.localizedMessage}"))
+        }
+    }
+
+    suspend fun makePayment(
+        context: Context,
+        bookingId: Int,
+        paymentMethod: String
+    ): Result<JSONObject> = withContext(Dispatchers.IO) {
+        try {
+            val token = getToken(context)
+            val url = URL("$BASE_URL/Payments")
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                setRequestProperty("Content-Type", "application/json")
+                if (!token.isNullOrBlank()) {
+                    setRequestProperty("Authorization", "Bearer $token")
+                }
+                doOutput = true
+                connectTimeout = 10000
+                readTimeout = 10000
+            }
+
+            val jsonBody = JSONObject().apply {
+                put("bookingId", bookingId)
+                put("paymentMethod", paymentMethod)
+            }
+
+            conn.outputStream.use { os ->
+                os.write(jsonBody.toString().toByteArray(Charsets.UTF_8))
+            }
+
+            val responseCode = conn.responseCode
+            val stream = if (responseCode in 200..299) conn.inputStream else conn.errorStream
+            val responseString = BufferedReader(InputStreamReader(stream)).use { it.readText() }
+
+            val jsonResponse = parseJsonSafe(responseString)
+
+            if (responseCode in 200..299) {
+                Result.success(jsonResponse)
+            } else {
+                Result.failure(Exception(jsonResponse.optString("message", "Payment processing failed.")))
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Payment error", e)
+            Result.failure(Exception("Could not connect to server: ${e.localizedMessage}"))
+        }
+    }
+
+    suspend fun cancelBooking(
+        context: Context,
+        bookingId: Int
+    ): Result<JSONObject> = withContext(Dispatchers.IO) {
+        try {
+            val token = getToken(context)
+            val url = URL("$BASE_URL/Bookings/$bookingId/cancel")
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "PUT"
+                if (!token.isNullOrBlank()) {
+                    setRequestProperty("Authorization", "Bearer $token")
+                }
+                connectTimeout = 10000
+                readTimeout = 10000
+            }
+
+            val responseCode = conn.responseCode
+            val stream = if (responseCode in 200..299) conn.inputStream else conn.errorStream
+            val responseString = BufferedReader(InputStreamReader(stream)).use { it.readText() }
+
+            val jsonResponse = parseJsonSafe(responseString)
+
+            if (responseCode in 200..299) {
+                Result.success(jsonResponse)
+            } else {
+                Result.failure(Exception(jsonResponse.optString("message", "Could not cancel booking.")))
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Cancel booking error", e)
+            Result.failure(Exception("Could not connect to server: ${e.localizedMessage}"))
+        }
+    }
+
+    suspend fun updateBooking(
+        context: Context,
+        bookingId: Int,
+        serviceId: Int,
+        vehicleType: String,
+        bookingDateTime: String,
+        locationType: String,
+        bookingAddress: String?
+    ): Result<JSONObject> = withContext(Dispatchers.IO) {
+        try {
+            val token = getToken(context)
+            val url = URL("$BASE_URL/Bookings/$bookingId")
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "PUT"
+                setRequestProperty("Content-Type", "application/json")
+                if (!token.isNullOrBlank()) {
+                    setRequestProperty("Authorization", "Bearer $token")
+                }
+                doOutput = true
+                connectTimeout = 10000
+                readTimeout = 10000
+            }
+
+            val jsonBody = JSONObject().apply {
+                put("serviceId", serviceId)
+                put("vehicleType", vehicleType)
+                put("bookingDateTime", bookingDateTime)
+                put("locationType", locationType)
+                if (!bookingAddress.isNullOrBlank()) {
+                    put("bookingAddress", bookingAddress)
+                }
+            }
+
+            conn.outputStream.use { os ->
+                os.write(jsonBody.toString().toByteArray(Charsets.UTF_8))
+            }
+
+            val responseCode = conn.responseCode
+            val stream = if (responseCode in 200..299) conn.inputStream else conn.errorStream
+            val responseString = BufferedReader(InputStreamReader(stream)).use { it.readText() }
+
+            val jsonResponse = parseJsonSafe(responseString)
+
+            if (responseCode in 200..299) {
+                Result.success(jsonResponse)
+            } else {
+                Result.failure(Exception(jsonResponse.optString("message", "Could not update booking.")))
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Update booking error", e)
             Result.failure(Exception("Could not connect to server: ${e.localizedMessage}"))
         }
     }

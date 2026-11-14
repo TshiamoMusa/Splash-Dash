@@ -9,25 +9,19 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+var rawConnStr = builder.Configuration.GetConnectionString("DefaultConnection");
 var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
-if (!string.IsNullOrEmpty(databaseUrl))
-{
-    try
-    {
-        var databaseUri = new Uri(databaseUrl);
-        var userInfo = databaseUri.UserInfo.Split(':');
-        connectionString = $"Server={databaseUri.Host};Port={databaseUri.Port};Database={databaseUri.LocalPath.TrimStart('/')};User Id={userInfo[0]};Password={userInfo[1]};SslMode=Require;Trust Server Certificate=true;";
-    }
-    catch
-    {
-        // Fallback to raw string if parsing fails
-        connectionString = databaseUrl;
-    }
-}
+var activeConnStr = !string.IsNullOrEmpty(databaseUrl) ? databaseUrl : rawConnStr;
+var connectionString = ConvertNeonUrlToNpgsqlConnectionString(activeConnStr);
 
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(connectionString));
+    options.UseNpgsql(connectionString, npgsqlOptions =>
+    {
+        npgsqlOptions.EnableRetryOnFailure(
+            maxRetryCount: 5,
+            maxRetryDelay: TimeSpan.FromSeconds(10),
+            errorCodesToAdd: null);
+    }));
 
 builder.Services.AddOpenApi();
 
@@ -96,27 +90,14 @@ app.MapControllers();
 using (var scope = app.Services.CreateScope())
 {
     var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
-    var connectionString = configuration.GetConnectionString("DefaultConnection");
+    var resolvedConn = configuration.GetConnectionString("DefaultConnection");
+    if (!string.IsNullOrEmpty(resolvedConn))
+    {
+        connectionString = ConvertNeonUrlToNpgsqlConnectionString(resolvedConn);
+    }
 
     try
     {
-        var builderConn = new NpgsqlConnectionStringBuilder(connectionString);
-        var targetDb = builderConn.Database;
-        builderConn.Database = "postgres";
-
-        using (var connection = new NpgsqlConnection(builderConn.ToString()))
-        {
-            connection.Open();
-            using var checkCmd = new NpgsqlCommand($"SELECT 1 FROM pg_database WHERE datname = '{targetDb}'", connection);
-            var exists = checkCmd.ExecuteScalar();
-            
-            if (exists == null)
-            {
-                using var createCmd = new NpgsqlCommand($"CREATE DATABASE \"{targetDb}\"", connection);
-                createCmd.ExecuteNonQuery();
-            }
-        }
-
         using (var dbConnection = new NpgsqlConnection(connectionString))
         {
             dbConnection.Open();
@@ -137,3 +118,29 @@ using (var scope = app.Services.CreateScope())
 // ---------------------------------
 
 app.Run();
+
+string ConvertNeonUrlToNpgsqlConnectionString(string? url)
+{
+    if (string.IsNullOrWhiteSpace(url)) return string.Empty;
+    if (!url.StartsWith("postgres://") && !url.StartsWith("postgresql://"))
+    {
+        return url;
+    }
+
+    try
+    {
+        var uri = new Uri(url);
+        var userInfo = uri.UserInfo.Split(':');
+        var user = userInfo.Length > 0 ? Uri.UnescapeDataString(userInfo[0]) : "";
+        var pass = userInfo.Length > 1 ? Uri.UnescapeDataString(userInfo[1]) : "";
+        var host = uri.Host;
+        var port = uri.Port > 0 ? uri.Port : 5432;
+        var db = uri.LocalPath.TrimStart('/');
+
+        return $"Host={host};Port={port};Database={db};Username={user};Password={pass};SslMode=Require;Trust Server Certificate=true;Pooling=true;Keepalive=30;";
+    }
+    catch
+    {
+        return url;
+    }
+}

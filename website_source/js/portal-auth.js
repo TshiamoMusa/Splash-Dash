@@ -1,14 +1,22 @@
+
 /*
  * Splash & Dash - shared helpers for the staff and admin website.
  * Loaded on every portal page. Exposes one global: Portal.
  *
- * Note: the role check here only controls what the browser SHOWS.
- * The real protection is [Authorize(Roles = ...)] on the API controllers.
+ * The browser role check controls what is displayed.
+ * Real security is enforced by [Authorize(Roles = ...)] on the API.
  */
 (function () {
     "use strict";
 
-    var API_BASE = "http://localhost:5160/api";
+    // Automatically selects the correct API for local or live use.
+    var isLocal = window.location.hostname === "localhost" ||
+                  window.location.hostname === "127.0.0.1";
+
+    var API_BASE = isLocal
+        ? "http://localhost:5160/api"
+        : "https://splash-dash-api.onrender.com/api";
+
     var TOKEN_KEY = "sd_token";
     var ACCOUNT_KEY = "sd_account";
 
@@ -24,7 +32,7 @@
         try {
             sessionStorage.setItem(TOKEN_KEY, data.token);
             sessionStorage.setItem(ACCOUNT_KEY, JSON.stringify(data.account));
-        } catch (e) { /* storage blocked: the user will be asked to log in again */ }
+        } catch (e) { }
     }
 
     function clear() {
@@ -53,8 +61,7 @@
         window.location.href = "index.html";
     }
 
-    // Sends the visitor to login.html unless a valid session exists.
-    // Pass "Admin" or "Staff" to restrict the page, or nothing to allow both.
+    // Checks whether the user has permission to access a portal page.
     function requireRole(role) {
         var token = getToken();
         var account = getAccount();
@@ -73,26 +80,38 @@
         return true;
     }
 
-    // Calls the API. Resolves with the parsed JSON, rejects with an Error whose
-    // message is safe to show to the user.
+    // Sends requests to the selected API.
     async function request(path, options) {
         options = options || {};
-        var headers = Object.assign({ "Content-Type": "application/json" }, options.headers || {});
+
+        var headers = Object.assign(
+            { "Content-Type": "application/json" },
+            options.headers || {}
+        );
+
         var token = getToken();
-        if (token) headers.Authorization = "Bearer " + token;
+
+        if (token) {
+            headers.Authorization = "Bearer " + token;
+        }
 
         var res;
+
         try {
-            res = await fetch(API_BASE + path, Object.assign({}, options, { headers: headers }));
+            res = await fetch(API_BASE + path, Object.assign({}, options, {
+                headers: headers
+            }));
         } catch (e) {
-            throw new Error("Cannot reach the server. Check that the API is running.");
+            throw new Error("Cannot reach the server. Check your internet connection or API availability.");
         }
 
         var data = null;
-        try { data = await res.json(); } catch (e) { }
+
+        try {
+            data = await res.json();
+        } catch (e) { }
 
         if (res.status === 401 && token) {
-            // Session expired or token rejected.
             clear();
             window.location.replace("login.html");
             throw new Error("Your session has expired. Please log in again.");
@@ -103,7 +122,9 @@
         }
 
         if (!res.ok) {
-            throw new Error((data && data.message) || "Request failed (" + res.status + ").");
+            throw new Error(
+                (data && data.message) || "Request failed (" + res.status + ")."
+            );
         }
 
         return data;
@@ -114,21 +135,31 @@
     }
 
     function post(path, body) {
-        return request(path, { method: "POST", body: JSON.stringify(body || {}) });
+        return request(path, {
+            method: "POST",
+            body: JSON.stringify(body || {})
+        });
     }
 
     function put(path, body) {
-        return request(path, { method: "PUT", body: JSON.stringify(body || {}) });
+        return request(path, {
+            method: "PUT",
+            body: JSON.stringify(body || {})
+        });
     }
 
-    // Logs in a staff or admin account. Customers are refused: they use the app.
+    // Logs in admin and staff accounts.
     async function login(identifier, password) {
         var data = await request("/auth/login", {
             method: "POST",
-            body: JSON.stringify({ identifier: identifier, password: password })
+            body: JSON.stringify({
+                identifier: identifier,
+                password: password
+            })
         });
 
         var role = data.account.role;
+
         if (role !== "Admin" && role !== "Staff") {
             throw new Error("Customers use the Splash & Dash mobile app.");
         }
@@ -137,18 +168,22 @@
         return data.account;
     }
 
-    // Fills in the welcome name and makes every "Logout" link end the session.
+    // Displays the welcome name and handles logout links.
     document.addEventListener("DOMContentLoaded", function () {
         var account = getAccount();
 
         if (account) {
             ["adminName", "staffName"].forEach(function (id) {
                 var el = document.getElementById(id);
-                if (el) el.textContent = account.fullName || account.firstName;
+
+                if (el) {
+                    el.textContent = account.fullName || account.firstName;
+                }
             });
         }
 
         var links = document.querySelectorAll("a");
+
         links.forEach(function (link) {
             if (link.textContent.trim() === "Logout") {
                 link.addEventListener("click", function (event) {
@@ -171,4 +206,5 @@
         login: login,
         logout: logout
     };
+
 })();

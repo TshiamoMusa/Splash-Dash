@@ -1,0 +1,472 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Edit Profile - Splash &amp; Dash</title>
+
+    <link rel="stylesheet" href="css/base.css">
+
+    <script src="js/portal-auth.js"></script>
+    <script>Portal.requireRole();</script>
+
+    <style>
+        .profile-card {
+            width: 100%;
+            max-width: 620px;
+            margin: 40px auto;
+            padding: 32px;
+            background: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 4px 18px rgba(0, 0, 0, 0.08);
+        }
+
+        .profile-card h1 {
+            margin-bottom: 8px;
+            color: #123b64;
+        }
+
+        .profile-intro {
+            margin-bottom: 28px;
+            color: #64748b;
+        }
+
+        .profile-section {
+            margin-top: 28px;
+        }
+
+        .profile-section h2 {
+            margin-bottom: 8px;
+            color: #174b78;
+            font-size: 20px;
+        }
+
+        .section-description {
+            margin-bottom: 20px;
+            color: #64748b;
+            font-size: 14px;
+        }
+
+        .profile-form .form-group {
+            margin-bottom: 18px;
+        }
+
+        .profile-form label {
+            display: block;
+            margin-bottom: 7px;
+            font-weight: 600;
+        }
+
+        .profile-form input {
+            width: 100%;
+        }
+
+        .profile-button {
+            width: 100%;
+            margin-top: 8px;
+        }
+
+        .profile-divider {
+            margin: 30px 0;
+            border: 0;
+            border-top: 1px solid #dbeafe;
+        }
+
+        .error-message,
+        .success-message {
+            padding: 12px;
+            margin-bottom: 16px;
+            border-radius: 6px;
+        }
+
+        .error-message {
+            color: #991b1b;
+            background: #fee2e2;
+            border: 1px solid #fecaca;
+        }
+
+        .success-message {
+            color: #166534;
+            background: #dcfce7;
+            border: 1px solid #bbf7d0;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-top: 24px;
+        }
+
+        @media (max-width: 600px) {
+            .profile-card {
+                margin: 20px auto;
+                padding: 22px;
+            }
+        }
+    </style>
+</head>
+
+<body class="auth-page">
+
+    <main class="auth-container">
+
+        <div class="profile-card">
+
+            <h1>Edit Profile</h1>
+
+            <p class="profile-intro">
+                Manage your personal information and account security.
+            </p>
+
+            <div class="error-message" id="profile-error"
+                 role="alert" hidden></div>
+
+            <div class="success-message" id="profile-success"
+                 role="status" hidden></div>
+
+            <!-- Personal information -->
+            <section class="profile-section">
+
+                <h2>Personal Information</h2>
+
+                <p class="section-description">
+                    Update your personal account details below.
+                </p>
+
+                <form id="profile-form" class="profile-form" novalidate>
+
+                    <div class="form-group">
+                        <label for="first-name">First Name</label>
+                        <input
+                            type="text"
+                            id="first-name"
+                            name="firstName"
+                            autocomplete="given-name"
+                            required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="surname">Surname</label>
+                        <input
+                            type="text"
+                            id="surname"
+                            name="surname"
+                            autocomplete="family-name"
+                            required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="email">Email Address</label>
+                        <input
+                            type="email"
+                            id="email"
+                            name="email"
+                            autocomplete="email"
+                            required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="phone-number">Phone Number</label>
+                        <input
+                            type="tel"
+                            id="phone-number"
+                            name="phoneNumber"
+                            autocomplete="tel"
+                            required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="username">Username</label>
+                        <input
+                            type="text"
+                            id="username"
+                            name="username"
+                            autocomplete="username"
+                            required>
+                    </div>
+
+                    <button type="submit" id="profile-button"
+                            class="profile-button">
+                        Save Profile Changes
+                    </button>
+
+                </form>
+
+            </section>
+
+            <hr class="profile-divider">
+
+            <!-- Password management -->
+            <section class="profile-section">
+
+                <h2>Change Password</h2>
+
+                <p class="section-description">
+                    Choose a new password that only you know.
+                </p>
+
+                <form id="password-form" class="profile-form" novalidate>
+
+                    <div class="form-group">
+                        <label for="current-password">
+                            Current Password
+                        </label>
+
+                        <input
+                            type="password"
+                            id="current-password"
+                            name="currentPassword"
+                            autocomplete="current-password"
+                            required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="new-password">New Password</label>
+
+                        <input
+                            type="password"
+                            id="new-password"
+                            name="newPassword"
+                            minlength="8"
+                            autocomplete="new-password"
+                            required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="confirm-password">
+                            Confirm New Password
+                        </label>
+
+                        <input
+                            type="password"
+                            id="confirm-password"
+                            name="confirmPassword"
+                            minlength="8"
+                            autocomplete="new-password"
+                            required>
+                    </div>
+
+                    <button type="submit" id="password-button"
+                            class="profile-button">
+                        Change Password
+                    </button>
+
+                </form>
+
+            </section>
+
+            <a class="back-link" href="javascript:history.back()">
+                Go back
+            </a>
+
+        </div>
+
+    </main>
+
+    <script>
+        (function () {
+            "use strict";
+
+            const profileForm = document.getElementById("profile-form");
+            const passwordForm = document.getElementById("password-form");
+
+            const profileError = document.getElementById("profile-error");
+            const profileSuccess = document.getElementById("profile-success");
+
+            const profileButton = document.getElementById("profile-button");
+            const passwordButton = document.getElementById("password-button");
+
+            // Display feedback messages.
+            function showMessage(errorBox, successBox, text, type) {
+                errorBox.hidden = true;
+                successBox.hidden = true;
+
+                if (type === "error") {
+                    errorBox.textContent = text;
+                    errorBox.hidden = false;
+                } else {
+                    successBox.textContent = text;
+                    successBox.hidden = false;
+                }
+            }
+
+            function clearMessages() {
+                profileError.hidden = true;
+                profileSuccess.hidden = true;
+            }
+
+            // Load the logged-in user's profile.
+            async function loadProfile() {
+                try {
+                    const account = await Portal.get("/auth/profile");
+
+                    document.getElementById("first-name").value =
+                        account.firstName || "";
+
+                    document.getElementById("surname").value =
+                        account.surname || "";
+
+                    document.getElementById("email").value =
+                        account.email || "";
+
+                    document.getElementById("phone-number").value =
+                        account.phoneNumber || "";
+
+                    document.getElementById("username").value =
+                        account.username || "";
+
+                } catch (error) {
+                    showMessage(
+                        profileError,
+                        profileSuccess,
+                        error.message || "Unable to load your profile.",
+                        "error"
+                    );
+                }
+            }
+
+            // Save personal information.
+            profileForm.addEventListener("submit", async function (event) {
+                event.preventDefault();
+                clearMessages();
+
+                const profile = {
+                    firstName: document.getElementById("first-name").value.trim(),
+                    surname: document.getElementById("surname").value.trim(),
+                    email: document.getElementById("email").value.trim(),
+                    phoneNumber: document.getElementById("phone-number").value.trim(),
+                    username: document.getElementById("username").value.trim()
+                };
+
+                if (Object.values(profile).some(value => !value)) {
+                    showMessage(
+                        profileError,
+                        profileSuccess,
+                        "Please complete all personal information fields.",
+                        "error"
+                    );
+                    return;
+                }
+
+                profileButton.disabled = true;
+                profileButton.textContent = "Saving...";
+
+                try {
+                    const result = await Portal.put("/auth/profile", profile);
+
+                    showMessage(
+                        profileError,
+                        profileSuccess,
+                        result.message || "Your profile has been updated successfully.",
+                        "success"
+                    );
+
+                } catch (error) {
+                    showMessage(
+                        profileError,
+                        profileSuccess,
+                        error.message || "Unable to update your profile.",
+                        "error"
+                    );
+                } finally {
+                    profileButton.disabled = false;
+                    profileButton.textContent = "Save Profile Changes";
+                }
+            });
+
+            // Change the logged-in user's password.
+            passwordForm.addEventListener("submit", async function (event) {
+                event.preventDefault();
+                clearMessages();
+
+                const currentPassword =
+                    document.getElementById("current-password").value;
+
+                const newPassword =
+                    document.getElementById("new-password").value;
+
+                const confirmPassword =
+                    document.getElementById("confirm-password").value;
+
+                if (!currentPassword || !newPassword || !confirmPassword) {
+                    showMessage(
+                        profileError,
+                        profileSuccess,
+                        "Please complete all three password fields.",
+                        "error"
+                    );
+                    return;
+                }
+
+                if (newPassword.length < 8) {
+                    showMessage(
+                        profileError,
+                        profileSuccess,
+                        "Your new password must contain at least 8 characters.",
+                        "error"
+                    );
+                    return;
+                }
+
+                if (newPassword !== confirmPassword) {
+                    showMessage(
+                        profileError,
+                        profileSuccess,
+                        "The new passwords do not match.",
+                        "error"
+                    );
+                    return;
+                }
+
+                if (newPassword === currentPassword) {
+                    showMessage(
+                        profileError,
+                        profileSuccess,
+                        "Your new password must be different from your current password.",
+                        "error"
+                    );
+                    return;
+                }
+
+                passwordButton.disabled = true;
+                passwordButton.textContent = "Changing Password...";
+
+                try {
+                    const result = await Portal.post(
+                        "/auth/change-password",
+                        {
+                            currentPassword: currentPassword,
+                            newPassword: newPassword
+                        }
+                    );
+
+                    passwordForm.reset();
+
+                    showMessage(
+                        profileError,
+                        profileSuccess,
+                        result.message || "Your password has been changed successfully.",
+                        "success"
+                    );
+
+                } catch (error) {
+                    showMessage(
+                        profileError,
+                        profileSuccess,
+                        error.message || "Unable to change your password.",
+                        "error"
+                    );
+                } finally {
+                    passwordButton.disabled = false;
+                    passwordButton.textContent = "Change Password";
+                }
+            });
+
+            loadProfile();
+
+        })();
+    </script>
+
+</body>
+</html>

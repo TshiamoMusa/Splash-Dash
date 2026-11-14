@@ -194,6 +194,28 @@ public class StaffController : ControllerBase
         if (role == "SuperAdmin" && !currentAdmin.IsSuperAdmin)
             return Forbid();
 
+        // Validate and standardise the selected Staff gender.
+        string? gender = null;
+
+        if (role == "Staff")
+        {
+            string selectedGender = request.Gender?.Trim() ?? "";
+
+            if (selectedGender.Equals("Male", StringComparison.OrdinalIgnoreCase))
+                gender = "Male";
+            else if (selectedGender.Equals("Female", StringComparison.OrdinalIgnoreCase))
+                gender = "Female";
+            else if (selectedGender.Equals("Undefined", StringComparison.OrdinalIgnoreCase))
+                gender = "Undefined";
+            else
+            {
+                return BadRequest(new
+                {
+                    message = "Please select Male, Female or Undefined for the Staff account."
+                });
+            }
+        }
+
         string email = request.Email.Trim().ToLowerInvariant();
         string username = request.Username.Trim();
 
@@ -266,7 +288,7 @@ public class StaffController : ControllerBase
                 _context.Staff.Add(new Staff
                 {
                     User = user,
-                    Gender = "Unspecified"
+                    Gender = gender!
                 });
             }
             else
@@ -533,6 +555,7 @@ public class CreateStaffAccountRequest
     public string Username { get; set; } = string.Empty;
     public string Role { get; set; } = string.Empty;
     public string Password { get; set; } = string.Empty;
+    public string? Gender { get; set; }
 }
 
 public class UpdateStaffStatusRequest

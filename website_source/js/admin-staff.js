@@ -1,4 +1,3 @@
-
 document.addEventListener("DOMContentLoaded", function () {
     const addForm = document.getElementById("add-staff-form");
     const filterForm = document.getElementById("staff-filter-form");
@@ -9,6 +8,8 @@ document.addEventListener("DOMContentLoaded", function () {
     const roleSelect = document.getElementById("staff-role");
     const superAdminOption = document.getElementById("super-admin-option");
     const roleHint = document.getElementById("role-hint");
+    const genderGroup = document.getElementById("gender-group");
+    const genderSelect = document.getElementById("staff-gender");
 
     let accounts = [];
     let currentAccount = Portal.getAccount() || {};
@@ -32,7 +33,21 @@ document.addEventListener("DOMContentLoaded", function () {
             : "You can create Staff and normal Admin accounts.";
     }
 
+    updateGenderField();
     loadAccounts();
+
+    roleSelect.addEventListener("change", updateGenderField);
+
+    function updateGenderField() {
+        const isStaff = roleSelect.value === "Staff";
+
+        genderGroup.hidden = !isStaff;
+        genderSelect.required = isStaff;
+
+        if (!isStaff) {
+            genderSelect.value = "";
+        }
+    }
 
     // Create a Staff, Admin or Super Admin account.
     addForm.addEventListener("submit", async function (event) {
@@ -55,6 +70,16 @@ document.addEventListener("DOMContentLoaded", function () {
             return;
         }
 
+        const selectedGender = formData.get("gender");
+
+        if (selectedRole === "Staff" && !selectedGender) {
+            showMessage(
+                "Please select a gender for the Staff account.",
+                "error"
+            );
+            return;
+        }
+
         const account = {
             firstName: formData.get("first_name").trim(),
             surname: formData.get("surname").trim(),
@@ -62,7 +87,8 @@ document.addEventListener("DOMContentLoaded", function () {
             phoneNumber: formData.get("contact_number").trim(),
             username: formData.get("username").trim(),
             role: selectedRole,
-            password: formData.get("password")
+            password: formData.get("password"),
+            gender: selectedRole === "Staff" ? selectedGender : null
         };
 
         addButton.disabled = true;
@@ -72,6 +98,7 @@ document.addEventListener("DOMContentLoaded", function () {
             const result = await Portal.post("/staff", account);
 
             addForm.reset();
+            updateGenderField();
 
             showMessage(
                 result.message || "Account created successfully.",

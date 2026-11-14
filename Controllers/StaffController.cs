@@ -5,6 +5,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SplashDash.Api.Data;
 using SplashDash.Api.Models;
+using System.Data;
+using System.Security.Claims;
 using System.Text.RegularExpressions;
 
 namespace SplashDash.Api.Controllers;
@@ -14,12 +16,27 @@ namespace SplashDash.Api.Controllers;
 [Authorize(Roles = "Admin")]
 public class StaffController : ControllerBase
 {
+    private const int MaximumSuperAdmins = 3;
+
     private readonly AppDbContext _context;
     private readonly PasswordHasher<User> _passwordHasher = new();
 
     public StaffController(AppDbContext context)
     {
         _context = context;
+    }
+
+    private async Task<User?> GetCurrentAdminAsync()
+    {
+        string? idValue = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (!int.TryParse(idValue, out int userId))
+            return null;
+
+        return await _context.Users.FirstOrDefaultAsync(u =>
+            u.UserId == userId &&
+            u.AccountType == "Admin" &&
+            u.IsActive);
     }
 
     private bool TryFormatAndValidateName(string input, out string formattedName)
@@ -29,24 +46,19 @@ public class StaffController : ControllerBase
         if (string.IsNullOrWhiteSpace(input))
             return false;
 
-        string[] parts = input.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        string[] parts = input.Trim().Split(
+            ' ',
+            StringSplitOptions.RemoveEmptyEntries);
+
         var formattedParts = new List<string>();
 
         foreach (var part in parts)
         {
-            if (part.Length < 3)
+            if (part.Length < 3 || !part.All(char.IsLetter))
                 return false;
 
-            foreach (char c in part)
-            {
-                if (!char.IsLetter(c))
-                    return false;
-            }
-
-            string formattedPart =
-                char.ToUpper(part[0]) + part.Substring(1).ToLower();
-
-            formattedParts.Add(formattedPart);
+            formattedParts.Add(
+                char.ToUpper(part[0]) + part.Substring(1).ToLower());
         }
 
         formattedName = string.Join(" ", formattedParts);
@@ -55,18 +67,15 @@ public class StaffController : ControllerBase
 
     private bool IsValidUsername(string username)
     {
-        if (string.IsNullOrWhiteSpace(username) || username.Length < 3)
-            return false;
-
-        return Regex.IsMatch(username.Trim(), @"^[a-zA-Z0-9_\-]+$");
+        return !string.IsNullOrWhiteSpace(username) &&
+               username.Length >= 3 &&
+               Regex.IsMatch(username.Trim(), @"^[a-zA-Z0-9_\-]+$");
     }
 
     private bool IsValidPhoneNumber(string phone)
     {
-        if (string.IsNullOrWhiteSpace(phone))
-            return false;
-
-        return Regex.IsMatch(phone.Trim(), @"^\+?[0-9\s\-]{8,15}$");
+        return !string.IsNullOrWhiteSpace(phone) &&
+               Regex.IsMatch(phone.Trim(), @"^\+?[0-9\s\-]{8,15}$");
     }
 
     private bool IsStrongPassword(string password)
@@ -74,11 +83,9 @@ public class StaffController : ControllerBase
         if (string.IsNullOrWhiteSpace(password) || password.Length < 8)
             return false;
 
-        bool hasUpper = password.Any(char.IsUpper);
-        bool hasLower = password.Any(char.IsLower);
-        bool hasDigit = password.Any(char.IsDigit);
-
-        return hasUpper && hasLower && hasDigit;
+        return password.Any(char.IsUpper) &&
+               password.Any(char.IsLower) &&
+               password.Any(char.IsDigit);
     }
 
     // GET: api/staff/all
@@ -97,7 +104,9 @@ public class StaffController : ControllerBase
                 email = u.Email,
                 phoneNumber = u.PhoneNumber,
                 username = u.Username,
-                role = u.AccountType,
+                role = u.IsSuperAdmin ? "Super Admin" : u.AccountType,
+                accountType = u.AccountType,
+                isSuperAdmin = u.IsSuperAdmin,
                 profileId = u.AccountType == "Staff"
                     ? (int?)u.StaffProfile!.StaffId
                     : u.AdminProfile!.AdminId,
@@ -111,8 +120,14 @@ public class StaffController : ControllerBase
 
     // POST: api/staff
     [HttpPost]
-    public async Task<IActionResult> CreateAccount(CreateStaffAccountRequest request)
+    public async Task<IActionResult> CreateAccount(
+        CreateStaffAccountRequest request)
     {
+        var currentAdmin = await GetCurrentAdminAsync();
+
+        if (currentAdmin == null)
+            return Unauthorized();
+
         if (string.IsNullOrWhiteSpace(request.FirstName) ||
             string.IsNullOrWhiteSpace(request.Surname) ||
             string.IsNullOrWhiteSpace(request.Email) ||
@@ -124,19 +139,19 @@ public class StaffController : ControllerBase
             return BadRequest(new { message = "All fields are required." });
         }
 
-        if (!TryFormatAndValidateName(request.FirstName, out string formattedFirstName))
+        if (!TryFormatAndValidateName(request.FirstName, out string firstName))
         {
             return BadRequest(new
             {
-                message = "First name must contain only letters, have at least 3 letters per word, and start with a capital letter."
+                message = "First name must contain only letters, with at least 3 letters per word."
             });
         }
 
-        if (!TryFormatAndValidateName(request.Surname, out string formattedSurname))
+        if (!TryFormatAndValidateName(request.Surname, out string surname))
         {
             return BadRequest(new
             {
-                message = "Surname must contain only letters, have at least 3 letters per word, and start with a capital letter."
+                message = "Surname must contain only letters, with at least 3 letters per word."
             });
         }
 
@@ -144,7 +159,7 @@ public class StaffController : ControllerBase
         {
             return BadRequest(new
             {
-                message = "Username must be at least 3 characters long and contain only letters, numbers, underscores, or hyphens (no spaces)."
+                message = "Username must be at least 3 characters and contain only letters, numbers, underscores or hyphens."
             });
         }
 
@@ -152,7 +167,7 @@ public class StaffController : ControllerBase
         {
             return BadRequest(new
             {
-                message = "Please enter a valid phone number (8 to 15 digits/characters)."
+                message = "Please enter a valid phone number."
             });
         }
 
@@ -160,15 +175,25 @@ public class StaffController : ControllerBase
         {
             return BadRequest(new
             {
-                message = "Password must be at least 8 characters long and include at least one uppercase letter, one lowercase letter, and one number."
+                message = "Password must be at least 8 characters and include uppercase, lowercase and a number."
             });
         }
 
         string role = request.Role.Trim();
 
-        if (role != "Staff" && role != "Admin")
+        if (role != "Staff" &&
+            role != "Admin" &&
+            role != "SuperAdmin")
         {
-            return BadRequest(new { message = "Role must be Staff or Admin." });
+            return BadRequest(new
+            {
+                message = "Role must be Staff, Admin or SuperAdmin."
+            });
+        }
+
+        if (role == "SuperAdmin" && !currentAdmin.IsSuperAdmin)
+        {
+            return Forbid();
         }
 
         string email = request.Email.Trim().ToLowerInvariant();
@@ -192,23 +217,46 @@ public class StaffController : ControllerBase
             });
         }
 
+        await using var transaction =
+            await _context.Database.BeginTransactionAsync(
+                IsolationLevel.Serializable);
+
+        if (role == "SuperAdmin")
+        {
+            int superAdminCount = await _context.Users.CountAsync(
+                u => u.AccountType == "Admin" && u.IsSuperAdmin);
+
+            if (superAdminCount >= MaximumSuperAdmins)
+            {
+                return Conflict(new
+                {
+                    message = "The maximum of 3 Super Admin accounts has been reached."
+                });
+            }
+        }
+
+        string accountType = role == "Staff" ? "Staff" : "Admin";
+
         var user = new User
         {
-            FirstName = formattedFirstName,
-            Surname = formattedSurname,
+            FirstName = firstName,
+            Surname = surname,
             Email = email,
             PhoneNumber = request.PhoneNumber.Trim(),
             Username = username,
-            AccountType = role,
+            AccountType = accountType,
+            IsSuperAdmin = role == "SuperAdmin",
             IsActive = true,
             CreatedAt = DateTimeOffset.UtcNow
         };
 
-        user.PasswordHash = _passwordHasher.HashPassword(user, request.Password);
+        user.PasswordHash = _passwordHasher.HashPassword(
+            user,
+            request.Password);
 
         _context.Users.Add(user);
 
-        if (role == "Staff")
+        if (accountType == "Staff")
         {
             _context.Staff.Add(new Staff
             {
@@ -225,18 +273,114 @@ public class StaffController : ControllerBase
         }
 
         await _context.SaveChangesAsync();
+        await transaction.CommitAsync();
 
-        // Return the created account without generating a route.
         return Ok(new
         {
-            message = role + " account created successfully.",
+            message = role == "SuperAdmin"
+                ? "Super Admin account created successfully."
+                : role + " account created successfully.",
             accountId = user.UserId,
             firstName = user.FirstName,
             surname = user.Surname,
             email = user.Email,
             username = user.Username,
-            role = user.AccountType,
+            role = user.IsSuperAdmin ? "Super Admin" : user.AccountType,
+            accountType = user.AccountType,
+            isSuperAdmin = user.IsSuperAdmin,
             isActive = user.IsActive
+        });
+    }
+
+    // PUT: api/staff/{id}/super-admin
+    [HttpPut("{id:int}/super-admin")]
+    public async Task<IActionResult> UpdateSuperAdminStatus(
+        int id,
+        UpdateSuperAdminRequest request)
+    {
+        var currentAdmin = await GetCurrentAdminAsync();
+
+        if (currentAdmin == null)
+            return Unauthorized();
+
+        if (!currentAdmin.IsSuperAdmin)
+            return Forbid();
+
+        var account = await _context.Users.FirstOrDefaultAsync(u =>
+            u.UserId == id && u.AccountType == "Admin");
+
+        if (account == null)
+        {
+            return NotFound(new
+            {
+                message = "Admin account not found."
+            });
+        }
+
+        if (account.UserId == currentAdmin.UserId &&
+            !request.IsSuperAdmin)
+        {
+            return BadRequest(new
+            {
+                message = "You cannot remove your own Super Admin access."
+            });
+        }
+
+        if (account.IsSuperAdmin == request.IsSuperAdmin)
+        {
+            return Ok(new
+            {
+                message = "The account already has the selected access.",
+                isSuperAdmin = account.IsSuperAdmin
+            });
+        }
+
+        await using var transaction =
+            await _context.Database.BeginTransactionAsync(
+                IsolationLevel.Serializable);
+
+        if (request.IsSuperAdmin)
+        {
+            int superAdminCount = await _context.Users.CountAsync(
+                u => u.AccountType == "Admin" && u.IsSuperAdmin);
+
+            if (superAdminCount >= MaximumSuperAdmins)
+            {
+                return Conflict(new
+                {
+                    message = "The maximum of 3 Super Admin accounts has been reached."
+                });
+            }
+        }
+        else if (account.IsActive)
+        {
+            int activeSuperAdmins = await _context.Users.CountAsync(
+                u => u.AccountType == "Admin" &&
+                     u.IsSuperAdmin &&
+                     u.IsActive);
+
+            if (activeSuperAdmins <= 1)
+            {
+                return BadRequest(new
+                {
+                    message = "You cannot remove access from the last active Super Admin."
+                });
+            }
+        }
+
+        account.IsSuperAdmin = request.IsSuperAdmin;
+
+        await _context.SaveChangesAsync();
+        await transaction.CommitAsync();
+
+        return Ok(new
+        {
+            message = request.IsSuperAdmin
+                ? "Account promoted to Super Admin successfully."
+                : "Super Admin access removed successfully.",
+            accountId = account.UserId,
+            isSuperAdmin = account.IsSuperAdmin,
+            role = account.IsSuperAdmin ? "Super Admin" : "Admin"
         });
     }
 
@@ -246,6 +390,11 @@ public class StaffController : ControllerBase
         int id,
         UpdateStaffStatusRequest request)
     {
+        var currentAdmin = await GetCurrentAdminAsync();
+
+        if (currentAdmin == null)
+            return Unauthorized();
+
         var account = await _context.Users.FirstOrDefaultAsync(u =>
             u.UserId == id &&
             (u.AccountType == "Staff" || u.AccountType == "Admin"));
@@ -258,10 +407,34 @@ public class StaffController : ControllerBase
             });
         }
 
-        // Admin accounts cannot be managed through this endpoint.
-        if (account.AccountType == "Admin")
+        if (account.AccountType == "Admin" &&
+            !currentAdmin.IsSuperAdmin)
         {
             return Forbid();
+        }
+
+        if (account.UserId == currentAdmin.UserId && !request.IsActive)
+        {
+            return BadRequest(new
+            {
+                message = "You cannot deactivate your own account."
+            });
+        }
+
+        if (account.IsSuperAdmin && !request.IsActive)
+        {
+            int activeSuperAdmins = await _context.Users.CountAsync(
+                u => u.AccountType == "Admin" &&
+                     u.IsSuperAdmin &&
+                     u.IsActive);
+
+            if (activeSuperAdmins <= 1)
+            {
+                return BadRequest(new
+                {
+                    message = "You cannot deactivate the last active Super Admin."
+                });
+            }
         }
 
         account.IsActive = request.IsActive;
@@ -285,6 +458,11 @@ public class StaffController : ControllerBase
         int id,
         ResetStaffPasswordRequest request)
     {
+        var currentAdmin = await GetCurrentAdminAsync();
+
+        if (currentAdmin == null)
+            return Unauthorized();
+
         if (string.IsNullOrWhiteSpace(request.NewPassword))
         {
             return BadRequest(new
@@ -297,7 +475,7 @@ public class StaffController : ControllerBase
         {
             return BadRequest(new
             {
-                message = "Password must be at least 8 characters long and include at least one uppercase letter, one lowercase letter, and one number."
+                message = "Password must be at least 8 characters and include uppercase, lowercase and a number."
             });
         }
 
@@ -313,14 +491,15 @@ public class StaffController : ControllerBase
             });
         }
 
-        // Admin passwords cannot be reset through this endpoint.
-        if (account.AccountType == "Admin")
+        if (account.AccountType == "Admin" &&
+            !currentAdmin.IsSuperAdmin)
         {
             return Forbid();
         }
 
         account.PasswordHash = _passwordHasher.HashPassword(
-            account, request.NewPassword);
+            account,
+            request.NewPassword);
 
         await _context.SaveChangesAsync();
 
@@ -351,4 +530,9 @@ public class UpdateStaffStatusRequest
 public class ResetStaffPasswordRequest
 {
     public string NewPassword { get; set; } = string.Empty;
+}
+
+public class UpdateSuperAdminRequest
+{
+    public bool IsSuperAdmin { get; set; }
 }

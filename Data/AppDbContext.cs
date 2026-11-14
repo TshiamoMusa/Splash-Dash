@@ -38,6 +38,9 @@ public class AppDbContext : DbContext
             entity.Property(e => e.FirebaseUid).HasColumnName("firebase_uid").HasMaxLength(150);
             entity.Property(e => e.AccountType).HasColumnName("account_type").HasMaxLength(20);
             entity.Property(e => e.IsActive).HasColumnName("is_active");
+            entity.Property(e => e.IsSuperAdmin)
+                .HasColumnName("is_super_admin")
+                .HasDefaultValue(false);
             entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp with time zone");
         });
 

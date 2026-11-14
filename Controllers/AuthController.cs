@@ -108,7 +108,6 @@ public class AuthController : ControllerBase
     public async Task<IActionResult> BootstrapAdmin(
         BootstrapAdminRequest request)
     {
-        // Temporarily allowed in production to seed the first Admin account.
         // Secure or disable this endpoint after initial setup.
 
         string? configuredKey = _configuration["Bootstrap:AdminKey"];
@@ -194,6 +193,7 @@ public class AuthController : ControllerBase
             PhoneNumber = request.PhoneNumber.Trim(),
             Username = username,
             AccountType = "Admin",
+            IsSuperAdmin = true,
             IsActive = true,
             CreatedAt = DateTimeOffset.UtcNow
         };
@@ -213,7 +213,7 @@ public class AuthController : ControllerBase
 
         return Ok(new
         {
-            message = "Initial Admin account created successfully.",
+            message = "Initial Super Admin account created successfully.",
             account = new
             {
                 id = adminUser.UserId,
@@ -221,7 +221,9 @@ public class AuthController : ControllerBase
                 adminUser.Surname,
                 adminUser.Email,
                 adminUser.Username,
-                role = adminUser.AccountType
+                role = adminUser.AccountType,
+                isSuperAdmin = adminUser.IsSuperAdmin,
+                displayRole = "Super Admin"
             }
         });
     }
@@ -252,7 +254,11 @@ public class AuthController : ControllerBase
                 email = account.Email,
                 phoneNumber = account.PhoneNumber,
                 username = account.Username,
-                role = account.AccountType
+                role = account.AccountType,
+                isSuperAdmin = account.IsSuperAdmin,
+                displayRole = account.IsSuperAdmin
+                    ? "Super Admin"
+                    : account.AccountType
             }
         });
     }
@@ -344,7 +350,11 @@ public class AuthController : ControllerBase
                 email = account.Email,
                 phoneNumber = account.PhoneNumber,
                 username = account.Username,
-                role = account.AccountType
+                role = account.AccountType,
+                isSuperAdmin = account.IsSuperAdmin,
+                displayRole = account.IsSuperAdmin
+                    ? "Super Admin"
+                    : account.AccountType
             }
         });
     }
@@ -465,7 +475,9 @@ public class AuthController : ControllerBase
             new(ClaimTypes.Name,
                 $"{account.FirstName} {account.Surname}"),
             new(ClaimTypes.Email, account.Email),
-            new(ClaimTypes.Role, account.AccountType)
+            new(ClaimTypes.Role, account.AccountType),
+            new("is_super_admin",
+                account.IsSuperAdmin ? "true" : "false")
         };
 
         var signingKey = new SymmetricSecurityKey(
@@ -496,7 +508,11 @@ public class AuthController : ControllerBase
                 surname = account.Surname,
                 fullName = $"{account.FirstName} {account.Surname}",
                 email = account.Email,
-                role = account.AccountType
+                role = account.AccountType,
+                isSuperAdmin = account.IsSuperAdmin,
+                displayRole = account.IsSuperAdmin
+                    ? "Super Admin"
+                    : account.AccountType
             }
         };
     }

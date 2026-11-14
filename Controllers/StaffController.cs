@@ -192,9 +192,7 @@ public class StaffController : ControllerBase
         }
 
         if (role == "SuperAdmin" && !currentAdmin.IsSuperAdmin)
-        {
             return Forbid();
-        }
 
         string email = request.Email.Trim().ToLowerInvariant();
         string username = request.Username.Trim();
@@ -217,78 +215,101 @@ public class StaffController : ControllerBase
             });
         }
 
-        await using var transaction =
-            await _context.Database.BeginTransactionAsync(
-                IsolationLevel.Serializable);
+        User? createdUser = null;
+        bool superAdminLimitReached = false;
 
-        if (role == "SuperAdmin")
+        var strategy = _context.Database.CreateExecutionStrategy();
+
+        await strategy.ExecuteAsync(async () =>
         {
-            int superAdminCount = await _context.Users.CountAsync(
-                u => u.AccountType == "Admin" && u.IsSuperAdmin);
+            // Clear tracked entities before each transaction attempt.
+            _context.ChangeTracker.Clear();
 
-            if (superAdminCount >= MaximumSuperAdmins)
+            await using var transaction =
+                await _context.Database.BeginTransactionAsync(
+                    IsolationLevel.Serializable);
+
+            if (role == "SuperAdmin")
             {
-                return Conflict(new
+                int superAdminCount = await _context.Users.CountAsync(
+                    u => u.AccountType == "Admin" && u.IsSuperAdmin);
+
+                if (superAdminCount >= MaximumSuperAdmins)
                 {
-                    message = "The maximum of 3 Super Admin accounts has been reached."
+                    superAdminLimitReached = true;
+                    await transaction.RollbackAsync();
+                    return;
+                }
+            }
+
+            string accountType = role == "Staff" ? "Staff" : "Admin";
+
+            var user = new User
+            {
+                FirstName = firstName,
+                Surname = surname,
+                Email = email,
+                PhoneNumber = request.PhoneNumber.Trim(),
+                Username = username,
+                AccountType = accountType,
+                IsSuperAdmin = role == "SuperAdmin",
+                IsActive = true,
+                CreatedAt = DateTimeOffset.UtcNow
+            };
+
+            user.PasswordHash = _passwordHasher.HashPassword(
+                user,
+                request.Password);
+
+            _context.Users.Add(user);
+
+            if (accountType == "Staff")
+            {
+                _context.Staff.Add(new Staff
+                {
+                    User = user,
+                    Gender = "Unspecified"
                 });
             }
-        }
-
-        string accountType = role == "Staff" ? "Staff" : "Admin";
-
-        var user = new User
-        {
-            FirstName = firstName,
-            Surname = surname,
-            Email = email,
-            PhoneNumber = request.PhoneNumber.Trim(),
-            Username = username,
-            AccountType = accountType,
-            IsSuperAdmin = role == "SuperAdmin",
-            IsActive = true,
-            CreatedAt = DateTimeOffset.UtcNow
-        };
-
-        user.PasswordHash = _passwordHasher.HashPassword(
-            user,
-            request.Password);
-
-        _context.Users.Add(user);
-
-        if (accountType == "Staff")
-        {
-            _context.Staff.Add(new Staff
+            else
             {
-                User = user,
-                Gender = "Unspecified"
-            });
-        }
-        else
+                _context.Admins.Add(new Admin
+                {
+                    User = user
+                });
+            }
+
+            await _context.SaveChangesAsync();
+            await transaction.CommitAsync();
+
+            createdUser = user;
+        });
+
+        if (superAdminLimitReached)
         {
-            _context.Admins.Add(new Admin
+            return Conflict(new
             {
-                User = user
+                message = "The maximum of 3 Super Admin accounts has been reached."
             });
         }
 
-        await _context.SaveChangesAsync();
-        await transaction.CommitAsync();
+        if (createdUser == null)
+            return StatusCode(500, new { message = "Account creation failed." });
 
         return Ok(new
         {
             message = role == "SuperAdmin"
                 ? "Super Admin account created successfully."
                 : role + " account created successfully.",
-            accountId = user.UserId,
-            firstName = user.FirstName,
-            surname = user.Surname,
-            email = user.Email,
-            username = user.Username,
-            role = user.IsSuperAdmin ? "Super Admin" : user.AccountType,
-            accountType = user.AccountType,
-            isSuperAdmin = user.IsSuperAdmin,
-            isActive = user.IsActive
+            accountId = createdUser.UserId,
+            firstName = createdUser.FirstName,
+            surname = createdUser.Surname,
+            email = createdUser.Email,
+            username = createdUser.Username,
+            role = createdUser.IsSuperAdmin ? "Super Admin" : createdUser.AccountType,
+            accountType = createdUser.AccountType,
+            isSuperAdmin = createdUser.IsSuperAdmin,
+            isActive = createdUser.IsActive
         });
     }
 
@@ -306,10 +327,10 @@ public class StaffController : ControllerBase
         if (!currentAdmin.IsSuperAdmin)
             return Forbid();
 
-        var account = await _context.Users.FirstOrDefaultAsync(u =>
+        var existingAccount = await _context.Users.FirstOrDefaultAsync(u =>
             u.UserId == id && u.AccountType == "Admin");
 
-        if (account == null)
+        if (existingAccount == null)
         {
             return NotFound(new
             {
@@ -317,7 +338,7 @@ public class StaffController : ControllerBase
             });
         }
 
-        if (account.UserId == currentAdmin.UserId &&
+        if (existingAccount.UserId == currentAdmin.UserId &&
             !request.IsSuperAdmin)
         {
             return BadRequest(new
@@ -326,61 +347,97 @@ public class StaffController : ControllerBase
             });
         }
 
-        if (account.IsSuperAdmin == request.IsSuperAdmin)
+        if (existingAccount.IsSuperAdmin == request.IsSuperAdmin)
         {
             return Ok(new
             {
                 message = "The account already has the selected access.",
-                isSuperAdmin = account.IsSuperAdmin
+                isSuperAdmin = existingAccount.IsSuperAdmin
             });
         }
 
-        await using var transaction =
-            await _context.Database.BeginTransactionAsync(
-                IsolationLevel.Serializable);
+        User? updatedAccount = null;
+        int errorStatus = 0;
+        string? errorMessage = null;
 
-        if (request.IsSuperAdmin)
+        var strategy = _context.Database.CreateExecutionStrategy();
+
+        await strategy.ExecuteAsync(async () =>
         {
-            int superAdminCount = await _context.Users.CountAsync(
-                u => u.AccountType == "Admin" && u.IsSuperAdmin);
+            _context.ChangeTracker.Clear();
 
-            if (superAdminCount >= MaximumSuperAdmins)
+            await using var transaction =
+                await _context.Database.BeginTransactionAsync(
+                    IsolationLevel.Serializable);
+
+            var account = await _context.Users.FirstOrDefaultAsync(u =>
+                u.UserId == id && u.AccountType == "Admin");
+
+            if (account == null)
             {
-                return Conflict(new
-                {
-                    message = "The maximum of 3 Super Admin accounts has been reached."
-                });
+                errorStatus = 404;
+                errorMessage = "Admin account not found.";
+                await transaction.RollbackAsync();
+                return;
             }
-        }
-        else if (account.IsActive)
-        {
-            int activeSuperAdmins = await _context.Users.CountAsync(
-                u => u.AccountType == "Admin" &&
-                     u.IsSuperAdmin &&
-                     u.IsActive);
 
-            if (activeSuperAdmins <= 1)
+            if (request.IsSuperAdmin)
             {
-                return BadRequest(new
+                int superAdminCount = await _context.Users.CountAsync(
+                    u => u.AccountType == "Admin" && u.IsSuperAdmin);
+
+                if (superAdminCount >= MaximumSuperAdmins)
                 {
-                    message = "You cannot remove access from the last active Super Admin."
-                });
+                    errorStatus = 409;
+                    errorMessage = "The maximum of 3 Super Admin accounts has been reached.";
+                    await transaction.RollbackAsync();
+                    return;
+                }
             }
-        }
+            else if (account.IsActive)
+            {
+                int activeSuperAdmins = await _context.Users.CountAsync(
+                    u => u.AccountType == "Admin" &&
+                         u.IsSuperAdmin &&
+                         u.IsActive);
 
-        account.IsSuperAdmin = request.IsSuperAdmin;
+                if (activeSuperAdmins <= 1)
+                {
+                    errorStatus = 400;
+                    errorMessage = "You cannot remove access from the last active Super Admin.";
+                    await transaction.RollbackAsync();
+                    return;
+                }
+            }
 
-        await _context.SaveChangesAsync();
-        await transaction.CommitAsync();
+            account.IsSuperAdmin = request.IsSuperAdmin;
+
+            await _context.SaveChangesAsync();
+            await transaction.CommitAsync();
+
+            updatedAccount = account;
+        });
+
+        if (errorStatus == 404)
+            return NotFound(new { message = errorMessage });
+
+        if (errorStatus == 409)
+            return Conflict(new { message = errorMessage });
+
+        if (errorStatus == 400)
+            return BadRequest(new { message = errorMessage });
+
+        if (updatedAccount == null)
+            return StatusCode(500, new { message = "Super Admin update failed." });
 
         return Ok(new
         {
             message = request.IsSuperAdmin
                 ? "Account promoted to Super Admin successfully."
                 : "Super Admin access removed successfully.",
-            accountId = account.UserId,
-            isSuperAdmin = account.IsSuperAdmin,
-            role = account.IsSuperAdmin ? "Super Admin" : "Admin"
+            accountId = updatedAccount.UserId,
+            isSuperAdmin = updatedAccount.IsSuperAdmin,
+            role = updatedAccount.IsSuperAdmin ? "Super Admin" : "Admin"
         });
     }
 
@@ -409,9 +466,7 @@ public class StaffController : ControllerBase
 
         if (account.AccountType == "Admin" &&
             !currentAdmin.IsSuperAdmin)
-        {
             return Forbid();
-        }
 
         if (account.UserId == currentAdmin.UserId && !request.IsActive)
         {
@@ -493,9 +548,7 @@ public class StaffController : ControllerBase
 
         if (account.AccountType == "Admin" &&
             !currentAdmin.IsSuperAdmin)
-        {
             return Forbid();
-        }
 
         account.PasswordHash = _passwordHasher.HashPassword(
             account,

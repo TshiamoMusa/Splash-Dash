@@ -15,6 +15,8 @@ public class User
 
     public string PhoneNumber { get; set; } = string.Empty;
 
+    public string Gender { get; set; } = "Undefined";
+
     public string? PasswordHash { get; set; }
 
     public string? FirebaseUid { get; set; }

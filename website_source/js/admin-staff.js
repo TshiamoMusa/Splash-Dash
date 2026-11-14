@@ -37,6 +37,17 @@ document.addEventListener("DOMContentLoaded", function () {
     updateGenderField();
     loadAccounts();
 
+    // Refresh account details when returning to the page.
+    document.addEventListener("visibilitychange", function () {
+        if (!document.hidden) {
+            loadAccounts();
+        }
+    });
+
+    window.addEventListener("focus", function () {
+        loadAccounts();
+    });
+
     roleSelect.addEventListener("change", updateGenderField);
 
     function updateGenderField() {
@@ -530,7 +541,10 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     function getAccountType(account) {
-        if (account.isSuperAdmin === true) {
+        if (
+            account.isSuperAdmin === true ||
+            account.isSuperAdmin === "true"
+        ) {
             return "Admin";
         }
 
@@ -539,7 +553,10 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     function getDisplayRole(account) {
-        if (account.isSuperAdmin === true) {
+        if (
+            account.isSuperAdmin === true ||
+            account.isSuperAdmin === "true"
+        ) {
             return "Super Admin";
         }
 

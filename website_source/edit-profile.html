@@ -163,6 +163,7 @@
             const genderGroup = document.getElementById("gender-group");
 
             let isStaffAccount = false;
+            let isEditing = false;
             let originalProfile = null;
 
             function showMessage(errorBox, successBox, text, type) {
@@ -190,7 +191,7 @@
                     email: document.getElementById("email").value,
                     phoneNumber: document.getElementById("phone-number").value,
                     username: document.getElementById("username").value,
-                    gender: isStaffAccount ? genderInput.value : null
+                    gender: genderInput.value
                 };
             }
 
@@ -200,25 +201,25 @@
                 document.getElementById("email").value = profile.email;
                 document.getElementById("phone-number").value = profile.phoneNumber;
                 document.getElementById("username").value = profile.username;
-
-                if (isStaffAccount) {
-                    genderInput.value = profile.gender || "Undefined";
-                }
+                genderInput.value = profile.gender || "Undefined";
             }
 
-            function setProfileEditing(isEditing) {
+            function setProfileEditing(editing) {
+                isEditing = editing;
+
                 profileInputs.forEach(function (input) {
-                    input.disabled = !isEditing;
+                    input.disabled = !editing;
                 });
 
-                genderInput.disabled = !isEditing || !isStaffAccount;
+                // Enable Gender while editing; only Staff accounts can save it.
+                genderInput.disabled = !editing;
 
-                editProfileButton.hidden = isEditing;
-                profileButton.hidden = !isEditing;
-                cancelProfileButton.hidden = !isEditing;
-                editingMessage.hidden = !isEditing;
+                editProfileButton.hidden = editing;
+                profileButton.hidden = !editing;
+                cancelProfileButton.hidden = !editing;
+                editingMessage.hidden = !editing;
 
-                if (isEditing) {
+                if (editing) {
                     document.getElementById("first-name").focus();
                 }
             }
@@ -228,11 +229,23 @@
                     const response = await Portal.get("/auth/profile");
                     const account = response.account || response;
 
-                    const accountRole = String(
-                        account.role || account.accountType || ""
-                    ).trim().toLowerCase();
+                    console.log("Profile response:", response);
+                    console.log("Profile account:", account);
+                    console.log("Account role:", account.role);
+                    console.log("Account type:", account.accountType);
+                    console.log("Account keys:", Object.keys(account));
 
-                    isStaffAccount = accountRole === "staff";
+                    const roleValues = [
+                        account.role,
+                        account.accountType,
+                        account.account_type
+                    ];
+
+                    isStaffAccount = roleValues.some(function (value) {
+                        return String(value || "").trim().toLowerCase() === "staff";
+                    });
+
+                    console.log("Recognised as Staff:", isStaffAccount);
 
                     document.getElementById("first-name").value =
                         account.firstName || "";
@@ -251,9 +264,7 @@
 
                     genderGroup.hidden = !isStaffAccount;
 
-                    if (isStaffAccount) {
-                        genderInput.value = account.gender || "Undefined";
-                    }
+                    genderInput.value = account.gender || "Undefined";
 
                     originalProfile = getProfileValues();
 
@@ -322,19 +333,19 @@
                     return;
                 }
 
+                if (!isStaffAccount) {
+                    profile.gender = null;
+                }
+
                 profileButton.disabled = true;
                 profileButton.textContent = "Saving...";
 
                 try {
                     const result = await Portal.put("/auth/profile", profile);
 
-                    if (result.account) {
-                        const updatedAccount = result.account;
-
-                        if (isStaffAccount) {
-                            genderInput.value =
-                                updatedAccount.gender || profile.gender || "Undefined";
-                        }
+                    if (result.account && isStaffAccount) {
+                        genderInput.value =
+                            result.account.gender || profile.gender || "Undefined";
                     }
 
                     originalProfile = getProfileValues();

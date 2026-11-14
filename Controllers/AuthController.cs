@@ -108,8 +108,6 @@ public class AuthController : ControllerBase
     public async Task<IActionResult> BootstrapAdmin(
         BootstrapAdminRequest request)
     {
-        // Secure or disable this endpoint after initial setup.
-
         string? configuredKey = _configuration["Bootstrap:AdminKey"];
         string? suppliedKey = Request.Headers["X-Bootstrap-Key"].FirstOrDefault();
 
@@ -192,6 +190,7 @@ public class AuthController : ControllerBase
             Email = email,
             PhoneNumber = request.PhoneNumber.Trim(),
             Username = username,
+            Gender = "Undefined",
             AccountType = "Admin",
             IsSuperAdmin = true,
             IsActive = true,
@@ -243,14 +242,12 @@ public class AuthController : ControllerBase
             });
         }
 
-        Staff? staffProfile = null;
-
         if (account.AccountType == "Staff")
         {
-            staffProfile = await _context.Staff
-                .FirstOrDefaultAsync(s => s.UserId == account.UserId);
+            bool staffProfileExists = await _context.Staff
+                .AnyAsync(s => s.UserId == account.UserId);
 
-            if (staffProfile == null)
+            if (!staffProfileExists)
             {
                 return Unauthorized(new
                 {
@@ -275,11 +272,9 @@ public class AuthController : ControllerBase
                 displayRole = account.IsSuperAdmin
                     ? "Super Admin"
                     : account.AccountType,
-                gender = account.AccountType == "Staff"
-                    ? (string.IsNullOrWhiteSpace(staffProfile!.Gender)
-                        ? "Undefined"
-                        : staffProfile.Gender)
-                    : null
+                gender = string.IsNullOrWhiteSpace(account.Gender)
+                    ? "Undefined"
+                    : account.Gender
             }
         });
     }
@@ -351,6 +346,29 @@ public class AuthController : ControllerBase
             });
         }
 
+        string selectedGender = request.Gender?.Trim() ?? "";
+
+        if (selectedGender.Equals("Male", StringComparison.OrdinalIgnoreCase))
+        {
+            selectedGender = "Male";
+        }
+        else if (selectedGender.Equals("Female", StringComparison.OrdinalIgnoreCase))
+        {
+            selectedGender = "Female";
+        }
+        else if (string.IsNullOrWhiteSpace(selectedGender) ||
+                 selectedGender.Equals("Undefined", StringComparison.OrdinalIgnoreCase))
+        {
+            selectedGender = "Undefined";
+        }
+        else
+        {
+            return BadRequest(new
+            {
+                message = "Gender must be Male, Female or Undefined."
+            });
+        }
+
         Staff? staffProfile = null;
 
         if (account.AccountType == "Staff")
@@ -366,28 +384,8 @@ public class AuthController : ControllerBase
                 });
             }
 
-            string selectedGender = request.Gender?.Trim() ?? "";
-
-            if (string.IsNullOrWhiteSpace(selectedGender) ||
-                selectedGender.Equals("Undefined", StringComparison.OrdinalIgnoreCase))
-            {
-                staffProfile.Gender = "Undefined";
-            }
-            else if (selectedGender.Equals("Male", StringComparison.OrdinalIgnoreCase))
-            {
-                staffProfile.Gender = "Male";
-            }
-            else if (selectedGender.Equals("Female", StringComparison.OrdinalIgnoreCase))
-            {
-                staffProfile.Gender = "Female";
-            }
-            else
-            {
-                return BadRequest(new
-                {
-                    message = "Gender must be Male, Female or Undefined."
-                });
-            }
+            // Keep the existing Staff gender column synchronised.
+            staffProfile.Gender = selectedGender;
         }
 
         account.FirstName = firstName;
@@ -395,6 +393,7 @@ public class AuthController : ControllerBase
         account.Email = email;
         account.PhoneNumber = phoneNumber;
         account.Username = username;
+        account.Gender = selectedGender;
 
         await _context.SaveChangesAsync();
 
@@ -415,9 +414,7 @@ public class AuthController : ControllerBase
                 displayRole = account.IsSuperAdmin
                     ? "Super Admin"
                     : account.AccountType,
-                gender = account.AccountType == "Staff"
-                    ? staffProfile!.Gender
-                    : null
+                gender = account.Gender
             }
         });
     }
@@ -621,6 +618,7 @@ public class AuthController : ControllerBase
                 Surname = surname,
                 Email = email,
                 PhoneNumber = request.PhoneNumber ?? string.Empty,
+                Gender = "Undefined",
                 FirebaseUid = request.FirebaseUid,
                 AccountType = "Customer",
                 IsActive = true,

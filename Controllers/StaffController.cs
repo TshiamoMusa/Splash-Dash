@@ -215,14 +215,13 @@ public class StaffController : ControllerBase
             });
         }
 
-        User? createdUser = null;
-        bool superAdminLimitReached = false;
+        string accountType = role == "Staff" ? "Staff" : "Admin";
 
+        // Runs the complete transaction using EF Core's retry strategy.
         var strategy = _context.Database.CreateExecutionStrategy();
 
-        await strategy.ExecuteAsync(async () =>
+        var result = await strategy.ExecuteAsync(async () =>
         {
-            // Clear tracked entities before each transaction attempt.
             _context.ChangeTracker.Clear();
 
             await using var transaction =
@@ -236,13 +235,12 @@ public class StaffController : ControllerBase
 
                 if (superAdminCount >= MaximumSuperAdmins)
                 {
-                    superAdminLimitReached = true;
-                    await transaction.RollbackAsync();
-                    return;
+                    return (IActionResult)Conflict(new
+                    {
+                        message = "The maximum of 3 Super Admin accounts has been reached."
+                    });
                 }
             }
-
-            string accountType = role == "Staff" ? "Staff" : "Admin";
 
             var user = new User
             {
@@ -282,35 +280,24 @@ public class StaffController : ControllerBase
             await _context.SaveChangesAsync();
             await transaction.CommitAsync();
 
-            createdUser = user;
-        });
-
-        if (superAdminLimitReached)
-        {
-            return Conflict(new
+            return (IActionResult)Ok(new
             {
-                message = "The maximum of 3 Super Admin accounts has been reached."
+                message = role == "SuperAdmin"
+                    ? "Super Admin account created successfully."
+                    : role + " account created successfully.",
+                accountId = user.UserId,
+                firstName = user.FirstName,
+                surname = user.Surname,
+                email = user.Email,
+                username = user.Username,
+                role = user.IsSuperAdmin ? "Super Admin" : user.AccountType,
+                accountType = user.AccountType,
+                isSuperAdmin = user.IsSuperAdmin,
+                isActive = user.IsActive
             });
-        }
-
-        if (createdUser == null)
-            return StatusCode(500, new { message = "Account creation failed." });
-
-        return Ok(new
-        {
-            message = role == "SuperAdmin"
-                ? "Super Admin account created successfully."
-                : role + " account created successfully.",
-            accountId = createdUser.UserId,
-            firstName = createdUser.FirstName,
-            surname = createdUser.Surname,
-            email = createdUser.Email,
-            username = createdUser.Username,
-            role = createdUser.IsSuperAdmin ? "Super Admin" : createdUser.AccountType,
-            accountType = createdUser.AccountType,
-            isSuperAdmin = createdUser.IsSuperAdmin,
-            isActive = createdUser.IsActive
         });
+
+        return result;
     }
 
     // PUT: api/staff/{id}/super-admin
@@ -327,19 +314,7 @@ public class StaffController : ControllerBase
         if (!currentAdmin.IsSuperAdmin)
             return Forbid();
 
-        var existingAccount = await _context.Users.FirstOrDefaultAsync(u =>
-            u.UserId == id && u.AccountType == "Admin");
-
-        if (existingAccount == null)
-        {
-            return NotFound(new
-            {
-                message = "Admin account not found."
-            });
-        }
-
-        if (existingAccount.UserId == currentAdmin.UserId &&
-            !request.IsSuperAdmin)
+        if (id == currentAdmin.UserId && !request.IsSuperAdmin)
         {
             return BadRequest(new
             {
@@ -347,22 +322,10 @@ public class StaffController : ControllerBase
             });
         }
 
-        if (existingAccount.IsSuperAdmin == request.IsSuperAdmin)
-        {
-            return Ok(new
-            {
-                message = "The account already has the selected access.",
-                isSuperAdmin = existingAccount.IsSuperAdmin
-            });
-        }
-
-        User? updatedAccount = null;
-        int errorStatus = 0;
-        string? errorMessage = null;
-
+        // Runs the complete transaction using EF Core's retry strategy.
         var strategy = _context.Database.CreateExecutionStrategy();
 
-        await strategy.ExecuteAsync(async () =>
+        var result = await strategy.ExecuteAsync(async () =>
         {
             _context.ChangeTracker.Clear();
 
@@ -375,10 +338,19 @@ public class StaffController : ControllerBase
 
             if (account == null)
             {
-                errorStatus = 404;
-                errorMessage = "Admin account not found.";
-                await transaction.RollbackAsync();
-                return;
+                return (IActionResult)NotFound(new
+                {
+                    message = "Admin account not found."
+                });
+            }
+
+            if (account.IsSuperAdmin == request.IsSuperAdmin)
+            {
+                return (IActionResult)Ok(new
+                {
+                    message = "The account already has the selected access.",
+                    isSuperAdmin = account.IsSuperAdmin
+                });
             }
 
             if (request.IsSuperAdmin)
@@ -388,10 +360,10 @@ public class StaffController : ControllerBase
 
                 if (superAdminCount >= MaximumSuperAdmins)
                 {
-                    errorStatus = 409;
-                    errorMessage = "The maximum of 3 Super Admin accounts has been reached.";
-                    await transaction.RollbackAsync();
-                    return;
+                    return (IActionResult)Conflict(new
+                    {
+                        message = "The maximum of 3 Super Admin accounts has been reached."
+                    });
                 }
             }
             else if (account.IsActive)
@@ -403,10 +375,10 @@ public class StaffController : ControllerBase
 
                 if (activeSuperAdmins <= 1)
                 {
-                    errorStatus = 400;
-                    errorMessage = "You cannot remove access from the last active Super Admin.";
-                    await transaction.RollbackAsync();
-                    return;
+                    return (IActionResult)BadRequest(new
+                    {
+                        message = "You cannot remove access from the last active Super Admin."
+                    });
                 }
             }
 
@@ -415,30 +387,18 @@ public class StaffController : ControllerBase
             await _context.SaveChangesAsync();
             await transaction.CommitAsync();
 
-            updatedAccount = account;
+            return (IActionResult)Ok(new
+            {
+                message = request.IsSuperAdmin
+                    ? "Account promoted to Super Admin successfully."
+                    : "Super Admin access removed successfully.",
+                accountId = account.UserId,
+                isSuperAdmin = account.IsSuperAdmin,
+                role = account.IsSuperAdmin ? "Super Admin" : "Admin"
+            });
         });
 
-        if (errorStatus == 404)
-            return NotFound(new { message = errorMessage });
-
-        if (errorStatus == 409)
-            return Conflict(new { message = errorMessage });
-
-        if (errorStatus == 400)
-            return BadRequest(new { message = errorMessage });
-
-        if (updatedAccount == null)
-            return StatusCode(500, new { message = "Super Admin update failed." });
-
-        return Ok(new
-        {
-            message = request.IsSuperAdmin
-                ? "Account promoted to Super Admin successfully."
-                : "Super Admin access removed successfully.",
-            accountId = updatedAccount.UserId,
-            isSuperAdmin = updatedAccount.IsSuperAdmin,
-            role = updatedAccount.IsSuperAdmin ? "Super Admin" : "Admin"
-        });
+        return result;
     }
 
     // PUT: api/staff/{id}/status

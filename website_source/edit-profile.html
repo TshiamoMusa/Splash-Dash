@@ -11,244 +11,103 @@
 
     <script src="js/portal-auth.js"></script>
     <script>Portal.requireRole();</script>
-
-    <style>
-        .profile-card {
-            width: 100%;
-            max-width: 620px;
-            margin: 40px auto;
-            padding: 32px;
-            background: #ffffff;
-            border-radius: 12px;
-            box-shadow: 0 4px 18px rgba(0, 0, 0, 0.08);
-        }
-
-        .profile-card h1 {
-            margin-bottom: 8px;
-            color: #123b64;
-        }
-
-        .profile-intro {
-            margin-bottom: 28px;
-            color: #64748b;
-        }
-
-        .profile-section {
-            margin-top: 28px;
-        }
-
-        .profile-section h2 {
-            margin-bottom: 8px;
-            color: #174b78;
-            font-size: 20px;
-        }
-
-        .section-description {
-            margin-bottom: 20px;
-            color: #64748b;
-            font-size: 14px;
-        }
-
-        .profile-form .form-group {
-            margin-bottom: 18px;
-        }
-
-        .profile-form label {
-            display: block;
-            margin-bottom: 7px;
-            font-weight: 600;
-        }
-
-        .profile-form input {
-            width: 100%;
-        }
-
-        .profile-button {
-            width: 100%;
-            margin-top: 8px;
-        }
-
-        .profile-divider {
-            margin: 30px 0;
-            border: 0;
-            border-top: 1px solid #dbeafe;
-        }
-
-        .error-message,
-        .success-message {
-            padding: 12px;
-            margin-bottom: 16px;
-            border-radius: 6px;
-        }
-
-        .error-message {
-            color: #991b1b;
-            background: #fee2e2;
-            border: 1px solid #fecaca;
-        }
-
-        .success-message {
-            color: #166534;
-            background: #dcfce7;
-            border: 1px solid #bbf7d0;
-        }
-
-        .back-link {
-            display: inline-block;
-            margin-top: 24px;
-        }
-
-        @media (max-width: 600px) {
-            .profile-card {
-                margin: 20px auto;
-                padding: 22px;
-            }
-        }
-    </style>
 </head>
 
 <body class="auth-page">
 
     <main class="auth-container">
 
-        <div class="profile-card">
+        <div class="auth-card">
 
             <h1>Edit Profile</h1>
 
-            <p class="profile-intro">
-                Manage your personal information and account security.
-            </p>
+            <p>Manage your personal information and account security.</p>
 
-            <div class="error-message" id="profile-error"
-                 role="alert" hidden></div>
+            <div class="error-message" id="profile-error" role="alert" hidden></div>
+            <div class="success-message" id="profile-success" role="status" hidden></div>
 
-            <div class="success-message" id="profile-success"
-                 role="status" hidden></div>
-
-            <!-- Personal information -->
-            <section class="profile-section">
+            <section>
 
                 <h2>Personal Information</h2>
 
-                <p class="section-description">
-                    Update your personal account details below.
-                </p>
+                <p>Click Edit Profile to update your personal details.</p>
 
-                <form id="profile-form" class="profile-form" novalidate>
+                <form id="profile-form" novalidate>
 
                     <div class="form-group">
                         <label for="first-name">First Name</label>
-                        <input
-                            type="text"
-                            id="first-name"
-                            name="firstName"
-                            autocomplete="given-name"
-                            required>
+                        <input type="text" id="first-name" name="firstName"
+                               autocomplete="given-name" disabled required>
                     </div>
 
                     <div class="form-group">
                         <label for="surname">Surname</label>
-                        <input
-                            type="text"
-                            id="surname"
-                            name="surname"
-                            autocomplete="family-name"
-                            required>
+                        <input type="text" id="surname" name="surname"
+                               autocomplete="family-name" disabled required>
                     </div>
 
                     <div class="form-group">
                         <label for="email">Email Address</label>
-                        <input
-                            type="email"
-                            id="email"
-                            name="email"
-                            autocomplete="email"
-                            required>
+                        <input type="email" id="email" name="email"
+                               autocomplete="email" disabled required>
                     </div>
 
                     <div class="form-group">
                         <label for="phone-number">Phone Number</label>
-                        <input
-                            type="tel"
-                            id="phone-number"
-                            name="phoneNumber"
-                            autocomplete="tel"
-                            required>
+                        <input type="tel" id="phone-number" name="phoneNumber"
+                               autocomplete="tel" disabled required>
                     </div>
 
                     <div class="form-group">
                         <label for="username">Username</label>
-                        <input
-                            type="text"
-                            id="username"
-                            name="username"
-                            autocomplete="username"
-                            required>
+                        <input type="text" id="username" name="username"
+                               autocomplete="username" disabled required>
                     </div>
 
-                    <button type="submit" id="profile-button"
-                            class="profile-button">
-                        Save Profile Changes
+                    <button type="button" id="edit-profile-button">
+                        Edit Profile
+                    </button>
+
+                    <button type="submit" id="profile-button" hidden>
+                        Save Changes
                     </button>
 
                 </form>
 
             </section>
 
-            <hr class="profile-divider">
+            <hr>
 
-            <!-- Password management -->
-            <section class="profile-section">
+            <section>
 
                 <h2>Change Password</h2>
 
-                <p class="section-description">
-                    Choose a new password that only you know.
-                </p>
+                <p>Choose a new password that only you know.</p>
 
-                <form id="password-form" class="profile-form" novalidate>
+                <form id="password-form" novalidate>
 
                     <div class="form-group">
-                        <label for="current-password">
-                            Current Password
-                        </label>
-
-                        <input
-                            type="password"
-                            id="current-password"
-                            name="currentPassword"
-                            autocomplete="current-password"
-                            required>
+                        <label for="current-password">Current Password</label>
+                        <input type="password" id="current-password"
+                               name="currentPassword"
+                               autocomplete="current-password" required>
                     </div>
 
                     <div class="form-group">
                         <label for="new-password">New Password</label>
-
-                        <input
-                            type="password"
-                            id="new-password"
-                            name="newPassword"
-                            minlength="8"
-                            autocomplete="new-password"
-                            required>
+                        <input type="password" id="new-password"
+                               name="newPassword" minlength="8"
+                               autocomplete="new-password" required>
                     </div>
 
                     <div class="form-group">
-                        <label for="confirm-password">
-                            Confirm New Password
-                        </label>
-
-                        <input
-                            type="password"
-                            id="confirm-password"
-                            name="confirmPassword"
-                            minlength="8"
-                            autocomplete="new-password"
-                            required>
+                        <label for="confirm-password">Confirm New Password</label>
+                        <input type="password" id="confirm-password"
+                               name="confirmPassword" minlength="8"
+                               autocomplete="new-password" required>
                     </div>
 
-                    <button type="submit" id="password-button"
-                            class="profile-button">
+                    <button type="submit" id="password-button">
                         Change Password
                     </button>
 
@@ -274,10 +133,12 @@
             const profileError = document.getElementById("profile-error");
             const profileSuccess = document.getElementById("profile-success");
 
+            const editProfileButton = document.getElementById("edit-profile-button");
             const profileButton = document.getElementById("profile-button");
             const passwordButton = document.getElementById("password-button");
 
-            // Display feedback messages.
+            const profileInputs = profileForm.querySelectorAll("input");
+
             function showMessage(errorBox, successBox, text, type) {
                 errorBox.hidden = true;
                 successBox.hidden = true;
@@ -296,10 +157,19 @@
                 profileSuccess.hidden = true;
             }
 
-            // Load the logged-in user's profile.
+            function setProfileEditing(isEditing) {
+                profileInputs.forEach(function (input) {
+                    input.disabled = !isEditing;
+                });
+
+                editProfileButton.hidden = isEditing;
+                profileButton.hidden = !isEditing;
+            }
+
             async function loadProfile() {
                 try {
-                    const account = await Portal.get("/auth/profile");
+                    const response = await Portal.get("/auth/profile");
+                    const account = response.account || response;
 
                     document.getElementById("first-name").value =
                         account.firstName || "";
@@ -326,7 +196,11 @@
                 }
             }
 
-            // Save personal information.
+            editProfileButton.addEventListener("click", function () {
+                clearMessages();
+                setProfileEditing(true);
+            });
+
             profileForm.addEventListener("submit", async function (event) {
                 event.preventDefault();
                 clearMessages();
@@ -355,6 +229,8 @@
                 try {
                     const result = await Portal.put("/auth/profile", profile);
 
+                    setProfileEditing(false);
+
                     showMessage(
                         profileError,
                         profileSuccess,
@@ -371,11 +247,10 @@
                     );
                 } finally {
                     profileButton.disabled = false;
-                    profileButton.textContent = "Save Profile Changes";
+                    profileButton.textContent = "Save Changes";
                 }
             });
 
-            // Change the logged-in user's password.
             passwordForm.addEventListener("submit", async function (event) {
                 event.preventDefault();
                 clearMessages();

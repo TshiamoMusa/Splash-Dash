@@ -9,18 +9,25 @@
 (function () {
     "use strict";
 
-    // Uses the deployed API for both local and live website testing.
     var API_BASE = "https://splash-dash-api.onrender.com/api";
 
     var TOKEN_KEY = "sd_token";
     var ACCOUNT_KEY = "sd_account";
 
     function getToken() {
-        try { return sessionStorage.getItem(TOKEN_KEY); } catch (e) { return null; }
+        try {
+            return sessionStorage.getItem(TOKEN_KEY);
+        } catch (e) {
+            return null;
+        }
     }
 
     function getAccount() {
-        try { return JSON.parse(sessionStorage.getItem(ACCOUNT_KEY)); } catch (e) { return null; }
+        try {
+            return JSON.parse(sessionStorage.getItem(ACCOUNT_KEY));
+        } catch (e) {
+            return null;
+        }
     }
 
     function save(data) {
@@ -39,8 +46,12 @@
 
     function isExpired(token) {
         try {
-            var part = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+            var part = token.split(".")[1]
+                .replace(/-/g, "+")
+                .replace(/_/g, "/");
+
             var payload = JSON.parse(atob(part));
+
             return payload.exp * 1000 < Date.now();
         } catch (e) {
             return true;
@@ -48,7 +59,9 @@
     }
 
     function homeFor(role) {
-        return role === "Admin" ? "admin - dashboard.html" : "staff - dashboard.html";
+        return role === "Admin"
+            ? "admin - dashboard.html"
+            : "staff - dashboard.html";
     }
 
     function logout() {
@@ -56,7 +69,6 @@
         window.location.href = "index.html";
     }
 
-    // Checks whether the user has permission to access a portal page.
     function requireRole(role) {
         var token = getToken();
         var account = getAccount();
@@ -75,7 +87,6 @@
         return true;
     }
 
-    // Sends requests to the deployed API.
     async function request(path, options) {
         options = options || {};
 
@@ -97,7 +108,9 @@
                 headers: headers
             }));
         } catch (e) {
-            throw new Error("Cannot reach the server. Check your internet connection or API availability.");
+            throw new Error(
+                "Cannot reach the server. Check your internet connection or API availability."
+            );
         }
 
         var data = null;
@@ -109,7 +122,10 @@
         if (res.status === 401 && token) {
             clear();
             window.location.replace("login.html");
-            throw new Error("Your session has expired. Please log in again.");
+
+            throw new Error(
+                "Your session has expired. Please log in again."
+            );
         }
 
         if (res.status === 403) {
@@ -118,7 +134,8 @@
 
         if (!res.ok) {
             throw new Error(
-                (data && data.message) || "Request failed (" + res.status + ")."
+                (data && data.message) ||
+                "Request failed (" + res.status + ")."
             );
         }
 
@@ -143,7 +160,6 @@
         });
     }
 
-    // Logs in admin and staff accounts.
     async function login(identifier, password) {
         var data = await request("/auth/login", {
             method: "POST",
@@ -156,14 +172,16 @@
         var role = data.account.role;
 
         if (role !== "Admin" && role !== "Staff") {
-            throw new Error("Customers use the Splash & Dash mobile app.");
+            throw new Error(
+                "Customers use the Splash & Dash mobile app."
+            );
         }
 
         save(data);
+
         return data.account;
     }
 
-    // Displays the welcome name and handles logout links.
     document.addEventListener("DOMContentLoaded", function () {
         var account = getAccount();
 
@@ -172,7 +190,8 @@
                 var el = document.getElementById(id);
 
                 if (el) {
-                    el.textContent = account.fullName || account.firstName;
+                    el.textContent =
+                        account.fullName || account.firstName || "";
                 }
             });
         }

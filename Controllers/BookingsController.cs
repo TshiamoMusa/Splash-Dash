@@ -272,6 +272,88 @@ public class BookingsController : ControllerBase
             booking.BookingStatus
         });
     }
+
+    // Customer updates their own pending booking.
+    [Authorize(Roles = "Customer")]
+    [HttpPut("{id:int}")]
+    public async Task<IActionResult> UpdateBooking(int id, CreateBookingRequest request)
+    {
+        if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out int userId))
+        {
+            return Unauthorized();
+        }
+
+        var customer = await _context.Customers.FirstOrDefaultAsync(c => c.UserId == userId);
+        if (customer == null)
+        {
+            return NotFound(new { message = "Customer account not found." });
+        }
+
+        var booking = await _context.Bookings
+            .FirstOrDefaultAsync(b => b.BookingId == id && b.CustomerId == customer.CustomerId);
+
+        if (booking == null)
+        {
+            return NotFound(new { message = "Booking not found." });
+        }
+
+        if (booking.BookingStatus != "Pending")
+        {
+            return BadRequest(new { message = "Only pending bookings can be edited." });
+        }
+
+        var service = await _context.Services.FirstOrDefaultAsync(s => s.ServiceId == request.ServiceId && s.IsActive);
+        if (service == null)
+        {
+            return BadRequest(new { message = "Selected service is unavailable." });
+        }
+
+        booking.ServiceId = service.ServiceId;
+        booking.VehicleType = request.VehicleType;
+        booking.BookingDateTime = request.BookingDateTime;
+        booking.LocationType = request.LocationType;
+        booking.BookingAddress = request.LocationType == "House Call" ? (request.BookingAddress ?? customer.HomeAddress) : null;
+        booking.TotalAmount = service.Price;
+
+        await _context.SaveChangesAsync();
+
+        return Ok(new { message = "Booking updated successfully." });
+    }
+
+    // Customer cancels their own pending booking.
+    [Authorize(Roles = "Customer")]
+    [HttpPut("{id:int}/cancel")]
+    public async Task<IActionResult> CancelBooking(int id)
+    {
+        if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out int userId))
+        {
+            return Unauthorized();
+        }
+
+        var customer = await _context.Customers.FirstOrDefaultAsync(c => c.UserId == userId);
+        if (customer == null)
+        {
+            return NotFound(new { message = "Customer account not found." });
+        }
+
+        var booking = await _context.Bookings
+            .FirstOrDefaultAsync(b => b.BookingId == id && b.CustomerId == customer.CustomerId);
+
+        if (booking == null)
+        {
+            return NotFound(new { message = "Booking not found." });
+        }
+
+        if (booking.BookingStatus != "Pending" && booking.BookingStatus != "Confirmed")
+        {
+            return BadRequest(new { message = "This booking cannot be cancelled at this stage." });
+        }
+
+        booking.BookingStatus = "Cancelled";
+        await _context.SaveChangesAsync();
+
+        return Ok(new { message = "Booking cancelled successfully." });
+    }
 }
 
 public class CreateBookingRequest

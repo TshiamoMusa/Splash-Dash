@@ -1,9 +1,17 @@
 package com.example.splashanddash
 
+import android.app.AlertDialog
+import android.app.DatePickerDialog
 import android.os.Bundle
+import android.widget.ArrayAdapter
+import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.Spinner
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
 
 class BookingHistoryActivity : BaseActivity() {
 
@@ -35,7 +43,7 @@ class BookingHistoryActivity : BaseActivity() {
         main.addView(
             sectionTitle(
                 "My Bookings",
-                "View your SplashDash booking history"
+                "View, edit, or cancel your bookings"
             )
         )
 
@@ -57,7 +65,7 @@ class BookingHistoryActivity : BaseActivity() {
                 main.addView(
                     sectionTitle(
                         "My Bookings",
-                        "Your database booking history"
+                        "Your database booking history & management"
                     )
                 )
 
@@ -83,9 +91,47 @@ class BookingHistoryActivity : BaseActivity() {
                                 Status: ${booking.bookingStatus}
                             """.trimIndent()
 
-                            main.addView(
-                                card("Booking #${booking.bookingId}", details)
-                            )
+                            val bookingCard = card("Booking #${booking.bookingId}", details)
+
+                            // Allow editing or cancelling pending bookings
+                            if (booking.bookingStatus.equals("Pending", ignoreCase = true)) {
+
+                                // EDIT BUTTON
+                                bookingCard.addView(
+                                    button("EDIT BOOKING") {
+                                        showEditDialog(booking)
+                                    }
+                                )
+
+                                // CANCEL BUTTON
+                                bookingCard.addView(
+                                    outlineButton("CANCEL BOOKING") {
+                                        AlertDialog.Builder(this@BookingHistoryActivity)
+                                            .setTitle("Cancel Booking")
+                                            .setMessage("Are you sure you want to cancel Booking #${booking.bookingId}?")
+                                            .setPositiveButton("YES, CANCEL") { _, _ ->
+                                                lifecycleScope.launch {
+                                                    val cancelResult = ApiClient.cancelBooking(
+                                                        this@BookingHistoryActivity,
+                                                        booking.bookingId
+                                                    )
+                                                    runOnUiThread {
+                                                        if (cancelResult.isSuccess) {
+                                                            showAppMessage("Booking #${booking.bookingId} cancelled successfully.")
+                                                            loadBookings()
+                                                        } else {
+                                                            showAppMessage(cancelResult.exceptionOrNull()?.message ?: "Could not cancel booking.")
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            .setNegativeButton("NO", null)
+                                            .show()
+                                    }
+                                )
+                            }
+
+                            main.addView(bookingCard)
                         }
                     }
                 } else {
@@ -114,6 +160,89 @@ class BookingHistoryActivity : BaseActivity() {
                 )
 
                 main.addView(footer())
+            }
+        }
+    }
+
+    private fun showEditDialog(booking: BookingItem) {
+        lifecycleScope.launch {
+            val servicesResult = ApiClient.getServices()
+            runOnUiThread {
+                if (!servicesResult.isSuccess) {
+                    showAppMessage("Could not load services for editing.")
+                    return@runOnUiThread
+                }
+
+                val services = servicesResult.getOrNull() ?: emptyList()
+                if (services.isEmpty()) {
+                    showAppMessage("No services available.")
+                    return@runOnUiThread
+                }
+
+                val dialogLayout = LinearLayout(this@BookingHistoryActivity).apply {
+                    orientation = LinearLayout.VERTICAL
+                    setPadding(32, 24, 32, 24)
+                }
+
+                val vehicleTypes = arrayOf("Small Car", "Large Car", "SUV", "Bakkie")
+                val vehicleSpinner = Spinner(this@BookingHistoryActivity)
+                vehicleSpinner.adapter = ArrayAdapter(this@BookingHistoryActivity, android.R.layout.simple_spinner_dropdown_item, vehicleTypes)
+                dialogLayout.addView(text("Vehicle Type", 14f, true))
+                dialogLayout.addView(vehicleSpinner)
+
+                val serviceNames = services.map { "${it.serviceName} — R${it.price}" }
+                val serviceSpinner = Spinner(this@BookingHistoryActivity)
+                serviceSpinner.adapter = ArrayAdapter(this@BookingHistoryActivity, android.R.layout.simple_spinner_dropdown_item, serviceNames)
+                dialogLayout.addView(text("Service Package", 14f, true))
+                dialogLayout.addView(serviceSpinner)
+
+                val dateInput = EditText(this@BookingHistoryActivity).apply {
+                    hint = "Date (YYYY-MM-DD)"
+                    setText(booking.bookingDateTime.take(10))
+                }
+                dialogLayout.addView(text("Booking Date", 14f, true))
+                dialogLayout.addView(dateInput)
+
+                val timeInput = EditText(this@BookingHistoryActivity).apply {
+                    hint = "Time (HH:mm)"
+                    setText(booking.bookingDateTime.substringAfter("T").take(5))
+                }
+                dialogLayout.addView(text("Booking Time", 14f, true))
+                dialogLayout.addView(timeInput)
+
+                AlertDialog.Builder(this@BookingHistoryActivity)
+                    .setTitle("Edit Booking #${booking.bookingId}")
+                    .setView(dialogLayout)
+                    .setPositiveButton("SAVE CHANGES") { _, _ ->
+                        val vehicle = vehicleSpinner.selectedItem.toString()
+                        val serviceItem = services[serviceSpinner.selectedItemPosition]
+                        val date = dateInput.text.toString().trim()
+                        val time = timeInput.text.toString().trim()
+                        val dateTimeIso = "${date}T${time}:00Z"
+
+                        lifecycleScope.launch {
+                            val updateResult = ApiClient.updateBooking(
+                                context = this@BookingHistoryActivity,
+                                bookingId = booking.bookingId,
+                                serviceId = serviceItem.serviceId,
+                                vehicleType = vehicle,
+                                bookingDateTime = dateTimeIso,
+                                locationType = booking.locationType,
+                                bookingAddress = booking.bookingAddress
+                            )
+
+                            runOnUiThread {
+                                if (updateResult.isSuccess) {
+                                    showAppMessage("Booking updated successfully!")
+                                    loadBookings()
+                                } else {
+                                    showAppMessage(updateResult.exceptionOrNull()?.message ?: "Could not update booking.")
+                                }
+                            }
+                        }
+                    }
+                    .setNegativeButton("CANCEL", null)
+                    .show()
             }
         }
     }

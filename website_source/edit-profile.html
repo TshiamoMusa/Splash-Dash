@@ -32,6 +32,10 @@
 
                 <p>Click Edit Profile to update your personal details.</p>
 
+                <p class="form-hint" id="editing-message" role="status" hidden>
+                    Editing mode is enabled. You can now update your personal information.
+                </p>
+
                 <form id="profile-form" novalidate>
 
                     <div class="form-group">
@@ -79,6 +83,11 @@
 
                     <button type="submit" id="profile-button" hidden>
                         Save Changes
+                    </button>
+
+                    <button type="button" id="cancel-profile-button"
+                            class="btn-light" hidden>
+                        Cancel
                     </button>
 
                 </form>
@@ -141,9 +150,11 @@
 
             const profileError = document.getElementById("profile-error");
             const profileSuccess = document.getElementById("profile-success");
+            const editingMessage = document.getElementById("editing-message");
 
             const editProfileButton = document.getElementById("edit-profile-button");
             const profileButton = document.getElementById("profile-button");
+            const cancelProfileButton = document.getElementById("cancel-profile-button");
             const passwordButton = document.getElementById("password-button");
 
             const profileInputs = profileForm.querySelectorAll("input");
@@ -152,6 +163,7 @@
             const genderGroup = document.getElementById("gender-group");
 
             let isStaffAccount = false;
+            let originalProfile = null;
 
             function showMessage(errorBox, successBox, text, type) {
                 errorBox.hidden = true;
@@ -171,17 +183,44 @@
                 profileSuccess.hidden = true;
             }
 
+            function getProfileValues() {
+                return {
+                    firstName: document.getElementById("first-name").value,
+                    surname: document.getElementById("surname").value,
+                    email: document.getElementById("email").value,
+                    phoneNumber: document.getElementById("phone-number").value,
+                    username: document.getElementById("username").value,
+                    gender: isStaffAccount ? genderInput.value : null
+                };
+            }
+
+            function restoreProfileValues(profile) {
+                document.getElementById("first-name").value = profile.firstName;
+                document.getElementById("surname").value = profile.surname;
+                document.getElementById("email").value = profile.email;
+                document.getElementById("phone-number").value = profile.phoneNumber;
+                document.getElementById("username").value = profile.username;
+
+                if (isStaffAccount) {
+                    genderInput.value = profile.gender || "Undefined";
+                }
+            }
+
             function setProfileEditing(isEditing) {
                 profileInputs.forEach(function (input) {
                     input.disabled = !isEditing;
                 });
 
-                if (isStaffAccount) {
-                    genderInput.disabled = !isEditing;
-                }
+                genderInput.disabled = !isEditing || !isStaffAccount;
 
                 editProfileButton.hidden = isEditing;
                 profileButton.hidden = !isEditing;
+                cancelProfileButton.hidden = !isEditing;
+                editingMessage.hidden = !isEditing;
+
+                if (isEditing) {
+                    document.getElementById("first-name").focus();
+                }
             }
 
             async function loadProfile() {
@@ -189,7 +228,11 @@
                     const response = await Portal.get("/auth/profile");
                     const account = response.account || response;
 
-                    isStaffAccount = account.role === "Staff";
+                    const accountRole = String(
+                        account.role || account.accountType || ""
+                    ).trim().toLowerCase();
+
+                    isStaffAccount = accountRole === "staff";
 
                     document.getElementById("first-name").value =
                         account.firstName || "";
@@ -212,6 +255,8 @@
                         genderInput.value = account.gender || "Undefined";
                     }
 
+                    originalProfile = getProfileValues();
+
                     setProfileEditing(false);
 
                 } catch (error) {
@@ -226,21 +271,40 @@
 
             editProfileButton.addEventListener("click", function () {
                 clearMessages();
+
+                if (!originalProfile) {
+                    showMessage(
+                        profileError,
+                        profileSuccess,
+                        "Your profile has not loaded yet. Please try again.",
+                        "error"
+                    );
+                    return;
+                }
+
                 setProfileEditing(true);
+            });
+
+            cancelProfileButton.addEventListener("click", function () {
+                if (originalProfile) {
+                    restoreProfileValues(originalProfile);
+                }
+
+                clearMessages();
+                setProfileEditing(false);
             });
 
             profileForm.addEventListener("submit", async function (event) {
                 event.preventDefault();
                 clearMessages();
 
-                const profile = {
-                    firstName: document.getElementById("first-name").value.trim(),
-                    surname: document.getElementById("surname").value.trim(),
-                    email: document.getElementById("email").value.trim(),
-                    phoneNumber: document.getElementById("phone-number").value.trim(),
-                    username: document.getElementById("username").value.trim(),
-                    gender: isStaffAccount ? genderInput.value : null
-                };
+                const profile = getProfileValues();
+
+                profile.firstName = profile.firstName.trim();
+                profile.surname = profile.surname.trim();
+                profile.email = profile.email.trim();
+                profile.phoneNumber = profile.phoneNumber.trim();
+                profile.username = profile.username.trim();
 
                 if (
                     !profile.firstName ||
@@ -264,10 +328,16 @@
                 try {
                     const result = await Portal.put("/auth/profile", profile);
 
-                    if (result.account && isStaffAccount) {
-                        genderInput.value =
-                            result.account.gender || "Undefined";
+                    if (result.account) {
+                        const updatedAccount = result.account;
+
+                        if (isStaffAccount) {
+                            genderInput.value =
+                                updatedAccount.gender || profile.gender || "Undefined";
+                        }
                     }
+
+                    originalProfile = getProfileValues();
 
                     setProfileEditing(false);
 

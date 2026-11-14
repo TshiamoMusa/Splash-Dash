@@ -9,13 +9,8 @@
 (function () {
     "use strict";
 
-    // Automatically selects the correct API for local or live use.
-    var isLocal = window.location.hostname === "localhost" ||
-                  window.location.hostname === "127.0.0.1";
-
-    var API_BASE = isLocal
-        ? "http://localhost:5160/api"
-        : "https://splash-dash-api.onrender.com/api";
+    // Uses the deployed API for both local and live website testing.
+    var API_BASE = "https://splash-dash-api.onrender.com/api";
 
     var TOKEN_KEY = "sd_token";
     var ACCOUNT_KEY = "sd_account";
@@ -80,7 +75,7 @@
         return true;
     }
 
-    // Sends requests to the selected API.
+    // Sends requests to the deployed API.
     async function request(path, options) {
         options = options || {};
 

@@ -1,3 +1,4 @@
+
 document.addEventListener("DOMContentLoaded", function () {
     const addForm = document.getElementById("add-staff-form");
     const filterForm = document.getElementById("staff-filter-form");
@@ -7,8 +8,6 @@ document.addEventListener("DOMContentLoaded", function () {
     const clearButton = document.getElementById("clear-staff-filters");
 
     let accounts = [];
-
-    const currentAccount = Portal.getAccount();
 
     loadAccounts();
 
@@ -36,7 +35,11 @@ document.addEventListener("DOMContentLoaded", function () {
             const result = await Portal.post("/staff", account);
 
             addForm.reset();
-            showMessage(result.message || "Account created successfully.", "success");
+            showMessage(
+                result.message || "Account created successfully.",
+                "success"
+            );
+
             window.scrollTo({ top: 0, behavior: "smooth" });
             await loadAccounts();
         } catch (error) {
@@ -44,7 +47,7 @@ document.addEventListener("DOMContentLoaded", function () {
             window.scrollTo({ top: 0, behavior: "smooth" });
         } finally {
             addButton.disabled = false;
-            addButton.textContent = "Add Staff Member";
+            addButton.textContent = "Create Account";
         }
     });
 
@@ -54,15 +57,18 @@ document.addEventListener("DOMContentLoaded", function () {
         displayAccounts();
     });
 
-    document.getElementById("staff-search").addEventListener("input", displayAccounts);
-    document.getElementById("staff-status").addEventListener("change", displayAccounts);
+    document.getElementById("staff-search")
+        .addEventListener("input", displayAccounts);
+
+    document.getElementById("staff-status")
+        .addEventListener("change", displayAccounts);
 
     clearButton.addEventListener("click", function () {
         filterForm.reset();
         displayAccounts();
     });
 
-    // Handle password resets and account status changes.
+    // Handle Staff password resets.
     records.addEventListener("submit", async function (event) {
         const form = event.target;
 
@@ -75,7 +81,11 @@ document.addEventListener("DOMContentLoaded", function () {
         const newPassword = passwordInput.value;
 
         if (newPassword.length < 8) {
-            showMessage("The new password must contain at least 8 characters.", "error");
+            showMessage(
+                "The new password must contain at least 8 characters.",
+                "error"
+            );
+
             window.scrollTo({ top: 0, behavior: "smooth" });
             return;
         }
@@ -91,7 +101,12 @@ document.addEventListener("DOMContentLoaded", function () {
             );
 
             form.reset();
-            showMessage(result.message || "Password reset successfully.", "success");
+
+            showMessage(
+                result.message || "Password reset successfully.",
+                "success"
+            );
+
             window.scrollTo({ top: 0, behavior: "smooth" });
             form.closest("details").open = false;
         } catch (error) {
@@ -103,24 +118,29 @@ document.addEventListener("DOMContentLoaded", function () {
         }
     });
 
+    // Handle Staff account activation and deactivation.
     records.addEventListener("click", async function (event) {
         const button = event.target.closest("button[data-action]");
+
         if (!button) return;
 
         const action = button.dataset.action;
 
-        if (action !== "deactivate" && action !== "reactivate") return;
+        if (action !== "deactivate" && action !== "reactivate")
+            return;
 
         const accountId = Number(button.dataset.accountId);
-        const account = accounts.find(item => item.accountId === accountId);
+        const account = accounts.find(
+            item => item.accountId === accountId
+        );
 
-        if (!account) return;
+        if (!account || account.role !== "Staff") return;
 
         const activating = action === "reactivate";
 
         const confirmation = activating
-            ? "Reactivate this account?"
-            : "Deactivate this account?";
+            ? "Reactivate this Staff account?"
+            : "Deactivate this Staff account?";
 
         if (!confirm(confirmation)) return;
 
@@ -132,7 +152,11 @@ document.addEventListener("DOMContentLoaded", function () {
                 { isActive: activating }
             );
 
-            showMessage(result.message || "Account status updated.", "success");
+            showMessage(
+                result.message || "Account status updated.",
+                "success"
+            );
+
             window.scrollTo({ top: 0, behavior: "smooth" });
             await loadAccounts();
         } catch (error) {
@@ -143,13 +167,16 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 
     async function loadAccounts() {
-        records.innerHTML = "<tr><td colspan='8'>Loading accounts...</td></tr>";
+        records.innerHTML =
+            "<tr><td colspan='8'>Loading accounts...</td></tr>";
 
         try {
             const result = await Portal.get("/staff/all");
 
             if (!Array.isArray(result)) {
-                throw new Error("The API returned an unexpected account list.");
+                throw new Error(
+                    "The API returned an unexpected account list."
+                );
             }
 
             accounts = result;
@@ -158,25 +185,37 @@ document.addEventListener("DOMContentLoaded", function () {
         } catch (error) {
             accounts = [];
             updateStatistics();
-            records.innerHTML = "<tr><td colspan='8'>Unable to load accounts.</td></tr>";
+
+            records.innerHTML =
+                "<tr><td colspan='8'>Unable to load accounts.</td></tr>";
+
             showMessage(error.message, "error");
         }
     }
 
     function updateStatistics() {
-        const active = accounts.filter(account => account.isActive).length;
+        const active = accounts.filter(
+            account => account.isActive
+        ).length;
+
         const inactive = accounts.length - active;
 
-        document.getElementById("total-staff").textContent = accounts.length;
-        document.getElementById("active-staff").textContent = active;
-        document.getElementById("inactive-staff").textContent = inactive;
+        document.getElementById("total-staff").textContent =
+            accounts.length;
+
+        document.getElementById("active-staff").textContent =
+            active;
+
+        document.getElementById("inactive-staff").textContent =
+            inactive;
     }
 
     function displayAccounts() {
         const searchValue = document.getElementById("staff-search")
             .value.trim().toLowerCase();
 
-        const statusValue = document.getElementById("staff-status").value;
+        const statusValue =
+            document.getElementById("staff-status").value;
 
         const filteredAccounts = accounts.filter(account => {
             const searchableText = [
@@ -186,10 +225,14 @@ document.addEventListener("DOMContentLoaded", function () {
                 account.accountId
             ].join(" ").toLowerCase();
 
-            const matchesSearch = searchableText.includes(searchValue);
+            const matchesSearch =
+                searchableText.includes(searchValue);
 
-            const accountStatus = account.isActive ? "Active" : "Inactive";
-            const matchesStatus = !statusValue || accountStatus === statusValue;
+            const accountStatus =
+                account.isActive ? "Active" : "Inactive";
+
+            const matchesStatus =
+                !statusValue || accountStatus === statusValue;
 
             return matchesSearch && matchesStatus;
         });
@@ -201,6 +244,7 @@ document.addEventListener("DOMContentLoaded", function () {
             const cell = document.createElement("td");
 
             cell.colSpan = 8;
+
             cell.textContent = accounts.length === 0
                 ? "No Staff or Admin accounts have been created yet."
                 : "No accounts match your search.";
@@ -228,58 +272,69 @@ document.addEventListener("DOMContentLoaded", function () {
 
         const actionsCell = document.createElement("td");
         const actions = document.createElement("div");
+
         actions.className = "row-actions";
 
-        // Password reset.
-        const details = document.createElement("details");
-        const summary = document.createElement("summary");
-        summary.textContent = "Reset password";
+        // Admin accounts are visible but cannot be managed here.
+        if (account.role === "Admin") {
+            const protectedMessage = document.createElement("span");
 
-        const resetForm = document.createElement("form");
-        resetForm.dataset.action = "reset-password";
-        resetForm.dataset.accountId = account.accountId;
+            protectedMessage.textContent = "Protected Admin account";
+            protectedMessage.className = "protected-account";
 
-        const passwordInput = document.createElement("input");
-        passwordInput.type = "text";
-        passwordInput.name = "newPassword";
-        passwordInput.placeholder = "New temporary password";
-        passwordInput.minLength = 8;
-        passwordInput.autocomplete = "off";
-        passwordInput.required = true;
-        passwordInput.setAttribute("aria-label", "New temporary password");
-
-        const resetButton = document.createElement("button");
-        resetButton.type = "submit";
-        resetButton.textContent = "Reset";
-
-        resetForm.append(passwordInput, resetButton);
-        details.append(summary, resetForm);
-        actions.appendChild(details);
-
-        // Activate or deactivate the account.
-        const statusButton = document.createElement("button");
-        statusButton.type = "button";
-        statusButton.dataset.accountId = account.accountId;
-
-        if (account.isActive) {
-            statusButton.textContent = "Deactivate";
-            statusButton.dataset.action = "deactivate";
-
-            const isCurrentAdmin =
-                account.role === "Admin" &&
-                currentAccount &&
-                Number(currentAccount.id) === Number(account.accountId);
-
-            if (isCurrentAdmin) {
-                statusButton.disabled = true;
-                statusButton.title = "You cannot deactivate your own account.";
-            }
+            actions.appendChild(protectedMessage);
         } else {
-            statusButton.textContent = "Reactivate";
-            statusButton.dataset.action = "reactivate";
+            // Password reset for Staff accounts.
+            const details = document.createElement("details");
+            const summary = document.createElement("summary");
+
+            summary.textContent = "Reset password";
+
+            const resetForm = document.createElement("form");
+
+            resetForm.dataset.action = "reset-password";
+            resetForm.dataset.accountId = account.accountId;
+
+            const passwordInput = document.createElement("input");
+
+            passwordInput.type = "password";
+            passwordInput.name = "newPassword";
+            passwordInput.placeholder = "New temporary password";
+            passwordInput.minLength = 8;
+            passwordInput.autocomplete = "new-password";
+            passwordInput.required = true;
+
+            passwordInput.setAttribute(
+                "aria-label",
+                "New temporary password"
+            );
+
+            const resetButton = document.createElement("button");
+
+            resetButton.type = "submit";
+            resetButton.textContent = "Reset";
+
+            resetForm.append(passwordInput, resetButton);
+            details.append(summary, resetForm);
+            actions.appendChild(details);
+
+            // Activate or deactivate the Staff account.
+            const statusButton = document.createElement("button");
+
+            statusButton.type = "button";
+            statusButton.dataset.accountId = account.accountId;
+
+            if (account.isActive) {
+                statusButton.textContent = "Deactivate";
+                statusButton.dataset.action = "deactivate";
+            } else {
+                statusButton.textContent = "Reactivate";
+                statusButton.dataset.action = "reactivate";
+            }
+
+            actions.appendChild(statusButton);
         }
 
-        actions.appendChild(statusButton);
         actionsCell.appendChild(actions);
         row.appendChild(actionsCell);
 
@@ -288,9 +343,11 @@ document.addEventListener("DOMContentLoaded", function () {
 
     function addCell(row, value) {
         const cell = document.createElement("td");
-        cell.textContent = value === null || value === undefined || value === ""
-            ? "N/A"
-            : value;
+
+        cell.textContent =
+            value === null || value === undefined || value === ""
+                ? "N/A"
+                : value;
 
         row.appendChild(cell);
     }

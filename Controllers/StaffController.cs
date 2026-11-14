@@ -1,10 +1,10 @@
+
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SplashDash.Api.Data;
 using SplashDash.Api.Models;
-using System.Security.Claims;
 using System.Text.RegularExpressions;
 
 namespace SplashDash.Api.Controllers;
@@ -25,20 +25,27 @@ public class StaffController : ControllerBase
     private bool TryFormatAndValidateName(string input, out string formattedName)
     {
         formattedName = string.Empty;
-        if (string.IsNullOrWhiteSpace(input)) return false;
+
+        if (string.IsNullOrWhiteSpace(input))
+            return false;
 
         string[] parts = input.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
         var formattedParts = new List<string>();
 
         foreach (var part in parts)
         {
-            if (part.Length < 3) return false;
+            if (part.Length < 3)
+                return false;
+
             foreach (char c in part)
             {
-                if (!char.IsLetter(c)) return false;
+                if (!char.IsLetter(c))
+                    return false;
             }
-            // Auto-capitalize first letter, lowercase the rest
-            string formattedPart = char.ToUpper(part[0]) + part.Substring(1).ToLower();
+
+            string formattedPart =
+                char.ToUpper(part[0]) + part.Substring(1).ToLower();
+
             formattedParts.Add(formattedPart);
         }
 
@@ -48,24 +55,29 @@ public class StaffController : ControllerBase
 
     private bool IsValidUsername(string username)
     {
-        if (string.IsNullOrWhiteSpace(username) || username.Length < 3) return false;
-        // Alphanumeric, underscores, hyphens only, no spaces
+        if (string.IsNullOrWhiteSpace(username) || username.Length < 3)
+            return false;
+
         return Regex.IsMatch(username.Trim(), @"^[a-zA-Z0-9_\-]+$");
     }
 
     private bool IsValidPhoneNumber(string phone)
     {
-        if (string.IsNullOrWhiteSpace(phone)) return false;
-        // Allows digits, spaces, hyphens, and a leading plus sign
+        if (string.IsNullOrWhiteSpace(phone))
+            return false;
+
         return Regex.IsMatch(phone.Trim(), @"^\+?[0-9\s\-]{8,15}$");
     }
 
     private bool IsStrongPassword(string password)
     {
-        if (string.IsNullOrWhiteSpace(password) || password.Length < 8) return false;
+        if (string.IsNullOrWhiteSpace(password) || password.Length < 8)
+            return false;
+
         bool hasUpper = password.Any(char.IsUpper);
         bool hasLower = password.Any(char.IsLower);
         bool hasDigit = password.Any(char.IsDigit);
+
         return hasUpper && hasLower && hasDigit;
     }
 
@@ -112,30 +124,38 @@ public class StaffController : ControllerBase
             return BadRequest(new { message = "All fields are required." });
         }
 
-        // Validate and auto-capitalize names
         if (!TryFormatAndValidateName(request.FirstName, out string formattedFirstName))
         {
-            return BadRequest(new { message = "First name must contain only letters, have at least 3 letters per word, and start with a capital letter." });
+            return BadRequest(new
+            {
+                message = "First name must contain only letters, have at least 3 letters per word, and start with a capital letter."
+            });
         }
 
         if (!TryFormatAndValidateName(request.Surname, out string formattedSurname))
         {
-            return BadRequest(new { message = "Surname must contain only letters, have at least 3 letters per word, and start with a capital letter." });
+            return BadRequest(new
+            {
+                message = "Surname must contain only letters, have at least 3 letters per word, and start with a capital letter."
+            });
         }
 
-        // Validate Username
         if (!IsValidUsername(request.Username))
         {
-            return BadRequest(new { message = "Username must be at least 3 characters long and contain only letters, numbers, underscores, or hyphens (no spaces)." });
+            return BadRequest(new
+            {
+                message = "Username must be at least 3 characters long and contain only letters, numbers, underscores, or hyphens (no spaces)."
+            });
         }
 
-        // Validate Phone Number
         if (!IsValidPhoneNumber(request.PhoneNumber))
         {
-            return BadRequest(new { message = "Please enter a valid phone number (8 to 15 digits/characters)." });
+            return BadRequest(new
+            {
+                message = "Please enter a valid phone number (8 to 15 digits/characters)."
+            });
         }
 
-        // Validate Password strength
         if (!IsStrongPassword(request.Password))
         {
             return BadRequest(new
@@ -156,14 +176,20 @@ public class StaffController : ControllerBase
 
         if (await _context.Users.AnyAsync(u => u.Email.ToLower() == email))
         {
-            return Conflict(new { message = "An account with this email already exists." });
+            return Conflict(new
+            {
+                message = "An account with this email already exists."
+            });
         }
 
         if (await _context.Users.AnyAsync(u =>
             u.Username != null &&
             u.Username.ToLower() == username.ToLower()))
         {
-            return Conflict(new { message = "This username is already in use." });
+            return Conflict(new
+            {
+                message = "This username is already in use."
+            });
         }
 
         var user = new User
@@ -200,24 +226,18 @@ public class StaffController : ControllerBase
 
         await _context.SaveChangesAsync();
 
-        return CreatedAtAction(
-            nameof(GetAllAccounts),
-            new
-            {
-                accountId = user.UserId,
-                role = user.AccountType
-            },
-            new
-            {
-                message = role + " account created successfully.",
-                accountId = user.UserId,
-                firstName = user.FirstName,
-                surname = user.Surname,
-                email = user.Email,
-                username = user.Username,
-                role = user.AccountType,
-                isActive = user.IsActive
-            });
+        // Return the created account without generating a route.
+        return Ok(new
+        {
+            message = role + " account created successfully.",
+            accountId = user.UserId,
+            firstName = user.FirstName,
+            surname = user.Surname,
+            email = user.Email,
+            username = user.Username,
+            role = user.AccountType,
+            isActive = user.IsActive
+        });
     }
 
     // PUT: api/staff/{id}/status
@@ -232,32 +252,16 @@ public class StaffController : ControllerBase
 
         if (account == null)
         {
-            return NotFound(new { message = "Staff or Admin account not found." });
+            return NotFound(new
+            {
+                message = "Staff or Admin account not found."
+            });
         }
 
-        if (!request.IsActive && account.AccountType == "Admin")
+        // Admin accounts cannot be managed through this endpoint.
+        if (account.AccountType == "Admin")
         {
-            string? currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-
-            if (int.TryParse(currentUserId, out int loggedInUserId) &&
-                loggedInUserId == account.UserId)
-            {
-                return BadRequest(new
-                {
-                    message = "You cannot deactivate your own Admin account."
-                });
-            }
-
-            int activeAdmins = await _context.Admins
-                .CountAsync(a => a.User != null && a.User.IsActive);
-
-            if (activeAdmins <= 1)
-            {
-                return BadRequest(new
-                {
-                    message = "The last active Admin account cannot be deactivated."
-                });
-            }
+            return Forbid();
         }
 
         account.IsActive = request.IsActive;
@@ -283,7 +287,10 @@ public class StaffController : ControllerBase
     {
         if (string.IsNullOrWhiteSpace(request.NewPassword))
         {
-            return BadRequest(new { message = "A new password is required." });
+            return BadRequest(new
+            {
+                message = "A new password is required."
+            });
         }
 
         if (!IsStrongPassword(request.NewPassword))
@@ -300,7 +307,16 @@ public class StaffController : ControllerBase
 
         if (account == null)
         {
-            return NotFound(new { message = "Staff or Admin account not found." });
+            return NotFound(new
+            {
+                message = "Staff or Admin account not found."
+            });
+        }
+
+        // Admin passwords cannot be reset through this endpoint.
+        if (account.AccountType == "Admin")
+        {
+            return Forbid();
         }
 
         account.PasswordHash = _passwordHasher.HashPassword(

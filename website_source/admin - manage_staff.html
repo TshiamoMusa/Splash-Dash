@@ -1,4 +1,5 @@
-﻿<!DOCTYPE html>
+﻿
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -158,6 +159,9 @@
                         <option value="Female">Female</option>
                         <option value="Undefined">Undefined</option>
                     </select>
+                    <p class="form-hint">
+                        If no option is selected, Gender will be saved as Undefined.
+                    </p>
                 </div>
 
                 <div class="form-group">
@@ -228,6 +232,7 @@
                             <th>Contact Number</th>
                             <th>Username</th>
                             <th>Account Role</th>
+                            <th>Gender</th>
                             <th>Account Status</th>
                             <th>Actions</th>
                         </tr>
@@ -235,7 +240,7 @@
 
                     <tbody id="staff-records">
                         <tr>
-                            <td colspan="8">Loading accounts...</td>
+                            <td colspan="9">Loading accounts...</td>
                         </tr>
                     </tbody>
 

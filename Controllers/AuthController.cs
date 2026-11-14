@@ -243,6 +243,22 @@ public class AuthController : ControllerBase
             });
         }
 
+        Staff? staffProfile = null;
+
+        if (account.AccountType == "Staff")
+        {
+            staffProfile = await _context.Staff
+                .FirstOrDefaultAsync(s => s.UserId == account.UserId);
+
+            if (staffProfile == null)
+            {
+                return Unauthorized(new
+                {
+                    message = "Your Staff profile could not be verified."
+                });
+            }
+        }
+
         return Ok(new
         {
             account = new
@@ -258,7 +274,12 @@ public class AuthController : ControllerBase
                 isSuperAdmin = account.IsSuperAdmin,
                 displayRole = account.IsSuperAdmin
                     ? "Super Admin"
-                    : account.AccountType
+                    : account.AccountType,
+                gender = account.AccountType == "Staff"
+                    ? (string.IsNullOrWhiteSpace(staffProfile!.Gender)
+                        ? "Undefined"
+                        : staffProfile.Gender)
+                    : null
             }
         });
     }
@@ -330,6 +351,45 @@ public class AuthController : ControllerBase
             });
         }
 
+        Staff? staffProfile = null;
+
+        if (account.AccountType == "Staff")
+        {
+            staffProfile = await _context.Staff
+                .FirstOrDefaultAsync(s => s.UserId == account.UserId);
+
+            if (staffProfile == null)
+            {
+                return Unauthorized(new
+                {
+                    message = "Your Staff profile could not be verified."
+                });
+            }
+
+            string selectedGender = request.Gender?.Trim() ?? "";
+
+            if (string.IsNullOrWhiteSpace(selectedGender) ||
+                selectedGender.Equals("Undefined", StringComparison.OrdinalIgnoreCase))
+            {
+                staffProfile.Gender = "Undefined";
+            }
+            else if (selectedGender.Equals("Male", StringComparison.OrdinalIgnoreCase))
+            {
+                staffProfile.Gender = "Male";
+            }
+            else if (selectedGender.Equals("Female", StringComparison.OrdinalIgnoreCase))
+            {
+                staffProfile.Gender = "Female";
+            }
+            else
+            {
+                return BadRequest(new
+                {
+                    message = "Gender must be Male, Female or Undefined."
+                });
+            }
+        }
+
         account.FirstName = firstName;
         account.Surname = surname;
         account.Email = email;
@@ -354,7 +414,10 @@ public class AuthController : ControllerBase
                 isSuperAdmin = account.IsSuperAdmin,
                 displayRole = account.IsSuperAdmin
                     ? "Super Admin"
-                    : account.AccountType
+                    : account.AccountType,
+                gender = account.AccountType == "Staff"
+                    ? staffProfile!.Gender
+                    : null
             }
         });
     }
@@ -616,6 +679,7 @@ public class UpdateProfileRequest
     public string Email { get; set; } = string.Empty;
     public string PhoneNumber { get; set; } = string.Empty;
     public string Username { get; set; } = string.Empty;
+    public string? Gender { get; set; }
 }
 
 public class BootstrapAdminRequest

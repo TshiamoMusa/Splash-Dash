@@ -110,6 +110,9 @@ public class StaffController : ControllerBase
                 profileId = u.AccountType == "Staff"
                     ? (int?)u.StaffProfile!.StaffId
                     : u.AdminProfile!.AdminId,
+                gender = u.AccountType == "Staff"
+                    ? (u.StaffProfile!.Gender ?? "Undefined")
+                    : null,
                 isActive = u.IsActive,
                 accountStatus = u.IsActive ? "Active" : "Inactive"
             })
@@ -194,24 +197,31 @@ public class StaffController : ControllerBase
         if (role == "SuperAdmin" && !currentAdmin.IsSuperAdmin)
             return Forbid();
 
-        // Validate and standardise the selected Staff gender.
+        // Missing Staff gender defaults to Undefined.
         string? gender = null;
 
         if (role == "Staff")
         {
             string selectedGender = request.Gender?.Trim() ?? "";
 
-            if (selectedGender.Equals("Male", StringComparison.OrdinalIgnoreCase))
-                gender = "Male";
-            else if (selectedGender.Equals("Female", StringComparison.OrdinalIgnoreCase))
-                gender = "Female";
-            else if (selectedGender.Equals("Undefined", StringComparison.OrdinalIgnoreCase))
+            if (string.IsNullOrWhiteSpace(selectedGender) ||
+                selectedGender.Equals("Undefined", StringComparison.OrdinalIgnoreCase))
+            {
                 gender = "Undefined";
+            }
+            else if (selectedGender.Equals("Male", StringComparison.OrdinalIgnoreCase))
+            {
+                gender = "Male";
+            }
+            else if (selectedGender.Equals("Female", StringComparison.OrdinalIgnoreCase))
+            {
+                gender = "Female";
+            }
             else
             {
                 return BadRequest(new
                 {
-                    message = "Please select Male, Female or Undefined for the Staff account."
+                    message = "Gender must be Male, Female or Undefined."
                 });
             }
         }
@@ -239,7 +249,6 @@ public class StaffController : ControllerBase
 
         string accountType = role == "Staff" ? "Staff" : "Admin";
 
-        // Runs the complete transaction using EF Core's retry strategy.
         var strategy = _context.Database.CreateExecutionStrategy();
 
         var result = await strategy.ExecuteAsync(async () =>
@@ -315,6 +324,7 @@ public class StaffController : ControllerBase
                 role = user.IsSuperAdmin ? "Super Admin" : user.AccountType,
                 accountType = user.AccountType,
                 isSuperAdmin = user.IsSuperAdmin,
+                gender = accountType == "Staff" ? gender : null,
                 isActive = user.IsActive
             });
         });
@@ -344,7 +354,6 @@ public class StaffController : ControllerBase
             });
         }
 
-        // Runs the complete transaction using EF Core's retry strategy.
         var strategy = _context.Database.CreateExecutionStrategy();
 
         var result = await strategy.ExecuteAsync(async () =>

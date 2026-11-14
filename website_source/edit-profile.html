@@ -64,6 +64,15 @@
                                autocomplete="username" disabled required>
                     </div>
 
+                    <div class="form-group" id="gender-group" hidden>
+                        <label for="gender">Gender</label>
+                        <select id="gender" name="gender" disabled>
+                            <option value="Male">Male</option>
+                            <option value="Female">Female</option>
+                            <option value="Undefined">Undefined</option>
+                        </select>
+                    </div>
+
                     <button type="button" id="edit-profile-button">
                         Edit Profile
                     </button>
@@ -139,6 +148,11 @@
 
             const profileInputs = profileForm.querySelectorAll("input");
 
+            const genderInput = document.getElementById("gender");
+            const genderGroup = document.getElementById("gender-group");
+
+            let isStaffAccount = false;
+
             function showMessage(errorBox, successBox, text, type) {
                 errorBox.hidden = true;
                 successBox.hidden = true;
@@ -162,6 +176,10 @@
                     input.disabled = !isEditing;
                 });
 
+                if (isStaffAccount) {
+                    genderInput.disabled = !isEditing;
+                }
+
                 editProfileButton.hidden = isEditing;
                 profileButton.hidden = !isEditing;
             }
@@ -170,6 +188,8 @@
                 try {
                     const response = await Portal.get("/auth/profile");
                     const account = response.account || response;
+
+                    isStaffAccount = account.role === "Staff";
 
                     document.getElementById("first-name").value =
                         account.firstName || "";
@@ -185,6 +205,14 @@
 
                     document.getElementById("username").value =
                         account.username || "";
+
+                    genderGroup.hidden = !isStaffAccount;
+
+                    if (isStaffAccount) {
+                        genderInput.value = account.gender || "Undefined";
+                    }
+
+                    setProfileEditing(false);
 
                 } catch (error) {
                     showMessage(
@@ -210,10 +238,17 @@
                     surname: document.getElementById("surname").value.trim(),
                     email: document.getElementById("email").value.trim(),
                     phoneNumber: document.getElementById("phone-number").value.trim(),
-                    username: document.getElementById("username").value.trim()
+                    username: document.getElementById("username").value.trim(),
+                    gender: isStaffAccount ? genderInput.value : null
                 };
 
-                if (Object.values(profile).some(value => !value)) {
+                if (
+                    !profile.firstName ||
+                    !profile.surname ||
+                    !profile.email ||
+                    !profile.phoneNumber ||
+                    !profile.username
+                ) {
                     showMessage(
                         profileError,
                         profileSuccess,
@@ -228,6 +263,11 @@
 
                 try {
                     const result = await Portal.put("/auth/profile", profile);
+
+                    if (result.account && isStaffAccount) {
+                        genderInput.value =
+                            result.account.gender || "Undefined";
+                    }
 
                     setProfileEditing(false);
 

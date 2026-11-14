@@ -1,3 +1,4 @@
+
 document.addEventListener("DOMContentLoaded", function () {
     const addForm = document.getElementById("add-staff-form");
     const filterForm = document.getElementById("staff-filter-form");
@@ -42,7 +43,7 @@ document.addEventListener("DOMContentLoaded", function () {
         const isStaff = roleSelect.value === "Staff";
 
         genderGroup.hidden = !isStaff;
-        genderSelect.required = isStaff;
+        genderSelect.required = false;
 
         if (!isStaff) {
             genderSelect.value = "";
@@ -72,14 +73,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
         const selectedGender = formData.get("gender");
 
-        if (selectedRole === "Staff" && !selectedGender) {
-            showMessage(
-                "Please select a gender for the Staff account.",
-                "error"
-            );
-            return;
-        }
-
         const account = {
             firstName: formData.get("first_name").trim(),
             surname: formData.get("surname").trim(),
@@ -88,7 +81,9 @@ document.addEventListener("DOMContentLoaded", function () {
             username: formData.get("username").trim(),
             role: selectedRole,
             password: formData.get("password"),
-            gender: selectedRole === "Staff" ? selectedGender : null
+            gender: selectedRole === "Staff"
+                ? (selectedGender || "Undefined")
+                : null
         };
 
         addButton.disabled = true;
@@ -295,7 +290,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     async function loadAccounts() {
         records.innerHTML =
-            "<tr><td colspan='8'>Loading accounts...</td></tr>";
+            "<tr><td colspan='9'>Loading accounts...</td></tr>";
 
         try {
             const result = await Portal.get("/staff/all");
@@ -316,7 +311,7 @@ document.addEventListener("DOMContentLoaded", function () {
             updateStatistics();
 
             records.innerHTML =
-                "<tr><td colspan='8'>Unable to load accounts.</td></tr>";
+                "<tr><td colspan='9'>Unable to load accounts.</td></tr>";
 
             showMessage(error.message, "error");
         }
@@ -352,7 +347,8 @@ document.addEventListener("DOMContentLoaded", function () {
                 account.username,
                 account.email,
                 account.accountId,
-                getDisplayRole(account)
+                getDisplayRole(account),
+                getDisplayGender(account)
             ].join(" ").toLowerCase();
 
             const matchesSearch =
@@ -373,7 +369,7 @@ document.addEventListener("DOMContentLoaded", function () {
             const row = document.createElement("tr");
             const cell = document.createElement("td");
 
-            cell.colSpan = 8;
+            cell.colSpan = 9;
 
             cell.textContent = accounts.length === 0
                 ? "No Staff or Admin accounts have been created yet."
@@ -400,6 +396,7 @@ document.addEventListener("DOMContentLoaded", function () {
         addCell(row, account.phoneNumber);
         addCell(row, account.username);
         addCell(row, getDisplayRole(account));
+        addCell(row, getDisplayGender(account));
         addCell(row, account.isActive ? "Active" : "Inactive");
 
         const actionsCell = document.createElement("td");
@@ -460,6 +457,14 @@ document.addEventListener("DOMContentLoaded", function () {
         row.appendChild(actionsCell);
 
         return row;
+    }
+
+    function getDisplayGender(account) {
+        if (getAccountType(account) !== "Staff") {
+            return "N/A";
+        }
+
+        return account.gender || "Undefined";
     }
 
     function addProtectedMessage(actions, text) {

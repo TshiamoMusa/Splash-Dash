@@ -37,7 +37,6 @@ document.addEventListener("DOMContentLoaded", function () {
     updateGenderField();
     loadAccounts();
 
-    // Refresh account details when returning to the page.
     document.addEventListener("visibilitychange", function () {
         if (!document.hidden) {
             loadAccounts();
@@ -50,15 +49,10 @@ document.addEventListener("DOMContentLoaded", function () {
 
     roleSelect.addEventListener("change", updateGenderField);
 
+    // Gender is available for every account type.
     function updateGenderField() {
-        const isStaff = roleSelect.value === "Staff";
-
-        genderGroup.hidden = !isStaff;
+        genderGroup.hidden = false;
         genderSelect.required = false;
-
-        if (!isStaff) {
-            genderSelect.value = "";
-        }
     }
 
     // Create a Staff, Admin or Super Admin account.
@@ -92,9 +86,7 @@ document.addEventListener("DOMContentLoaded", function () {
             username: formData.get("username").trim(),
             role: selectedRole,
             password: formData.get("password"),
-            gender: selectedRole === "Staff"
-                ? (selectedGender || "Undefined")
-                : null
+            gender: selectedGender || "Undefined"
         };
 
         addButton.disabled = true;
@@ -244,7 +236,9 @@ document.addEventListener("DOMContentLoaded", function () {
             return;
         }
 
-        const isSuperAdminAccount = account.isSuperAdmin === true;
+        const isSuperAdminAccount =
+            account.isSuperAdmin === true ||
+            account.isSuperAdmin === "true";
 
         if (
             (action === "promote" && isSuperAdminAccount) ||
@@ -399,7 +393,10 @@ document.addEventListener("DOMContentLoaded", function () {
     function createAccountRow(account) {
         const row = document.createElement("tr");
         const accountType = getAccountType(account);
-        const isSuperAdminAccount = account.isSuperAdmin === true;
+
+        const isSuperAdminAccount =
+            account.isSuperAdmin === true ||
+            account.isSuperAdmin === "true";
 
         addCell(row, account.accountId);
         addCell(row, account.fullName);
@@ -470,11 +467,8 @@ document.addEventListener("DOMContentLoaded", function () {
         return row;
     }
 
+    // Display the saved Gender for every account.
     function getDisplayGender(account) {
-        if (getAccountType(account) !== "Staff") {
-            return "N/A";
-        }
-
         return account.gender || "Undefined";
     }
 
@@ -573,7 +567,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     function findAccount(accountId) {
         return accounts.find(
-            item => Number(item.accountId) === Number(accountId)
+            item => Number(getAccountId(item)) === Number(accountId)
         );
     }
 

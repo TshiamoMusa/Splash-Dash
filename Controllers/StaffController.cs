@@ -110,9 +110,7 @@ public class StaffController : ControllerBase
                 profileId = u.AccountType == "Staff"
                     ? (int?)u.StaffProfile!.StaffId
                     : u.AdminProfile!.AdminId,
-                gender = u.AccountType == "Staff"
-                    ? (u.StaffProfile!.Gender ?? "Undefined")
-                    : null,
+                gender = u.Gender,
                 isActive = u.IsActive,
                 accountStatus = u.IsActive ? "Active" : "Inactive"
             })
@@ -197,33 +195,30 @@ public class StaffController : ControllerBase
         if (role == "SuperAdmin" && !currentAdmin.IsSuperAdmin)
             return Forbid();
 
-        // Missing Staff gender defaults to Undefined.
-        string? gender = null;
+        // Validate gender for every account type.
+        string selectedGender = request.Gender?.Trim() ?? "";
 
-        if (role == "Staff")
+        string gender;
+
+        if (string.IsNullOrWhiteSpace(selectedGender) ||
+            selectedGender.Equals("Undefined", StringComparison.OrdinalIgnoreCase))
         {
-            string selectedGender = request.Gender?.Trim() ?? "";
-
-            if (string.IsNullOrWhiteSpace(selectedGender) ||
-                selectedGender.Equals("Undefined", StringComparison.OrdinalIgnoreCase))
+            gender = "Undefined";
+        }
+        else if (selectedGender.Equals("Male", StringComparison.OrdinalIgnoreCase))
+        {
+            gender = "Male";
+        }
+        else if (selectedGender.Equals("Female", StringComparison.OrdinalIgnoreCase))
+        {
+            gender = "Female";
+        }
+        else
+        {
+            return BadRequest(new
             {
-                gender = "Undefined";
-            }
-            else if (selectedGender.Equals("Male", StringComparison.OrdinalIgnoreCase))
-            {
-                gender = "Male";
-            }
-            else if (selectedGender.Equals("Female", StringComparison.OrdinalIgnoreCase))
-            {
-                gender = "Female";
-            }
-            else
-            {
-                return BadRequest(new
-                {
-                    message = "Gender must be Male, Female or Undefined."
-                });
-            }
+                message = "Gender must be Male, Female or Undefined."
+            });
         }
 
         string email = request.Email.Trim().ToLowerInvariant();
@@ -280,6 +275,7 @@ public class StaffController : ControllerBase
                 Email = email,
                 PhoneNumber = request.PhoneNumber.Trim(),
                 Username = username,
+                Gender = gender,
                 AccountType = accountType,
                 IsSuperAdmin = role == "SuperAdmin",
                 IsActive = true,
@@ -297,7 +293,7 @@ public class StaffController : ControllerBase
                 _context.Staff.Add(new Staff
                 {
                     User = user,
-                    Gender = gender!
+                    Gender = gender
                 });
             }
             else
@@ -324,7 +320,7 @@ public class StaffController : ControllerBase
                 role = user.IsSuperAdmin ? "Super Admin" : user.AccountType,
                 accountType = user.AccountType,
                 isSuperAdmin = user.IsSuperAdmin,
-                gender = accountType == "Staff" ? gender : null,
+                gender = user.Gender,
                 isActive = user.IsActive
             });
         });

@@ -1,4 +1,3 @@
-
 /* ========================================
    SPLASH & DASH - ADMIN PORTAL
 ======================================== */
@@ -88,6 +87,7 @@ body {
     color: var(--white);
     font-weight: 600;
     font-size: 0.9rem;
+    text-align: center;
 }
 
 .admin-navbar a:hover,
@@ -221,27 +221,31 @@ body {
     .admin-header .header-content {
         align-items: flex-start;
         flex-direction: column;
+        gap: 16px;
     }
 
     .admin-profile {
         justify-content: flex-start;
+        width: 100%;
     }
 }
 
 @media (max-width: 600px) {
     .admin-header {
-        padding: 24px 5%;
+        padding: 22px 4%;
     }
 
     .admin-navbar {
-        justify-content: flex-start;
-        gap: 4px;
-        padding: 10px 4%;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        padding: 12px 4%;
     }
 
     .admin-navbar a {
-        padding: 9px 12px;
-        font-size: 0.82rem;
+        padding: 10px 8px;
+        font-size: 0.85rem;
+        background: rgba(255, 255, 255, 0.08);
     }
 
     .admin-container {
@@ -250,7 +254,7 @@ body {
     }
 
     .dashboard-section {
-        padding: 20px 15px;
+        padding: 18px 14px;
     }
 
     .stats-grid {
@@ -258,11 +262,18 @@ body {
     }
 
     .admin-profile {
+        flex-direction: column;
+        align-items: stretch;
         gap: 8px;
     }
 
     .admin-profile a {
-        font-size: 0.82rem;
+        text-align: center;
+        font-size: 0.85rem;
+    }
+
+    .print-btn {
+        width: 100%;
     }
 }
 

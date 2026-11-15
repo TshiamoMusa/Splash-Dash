@@ -1,5 +1,4 @@
-﻿
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -9,10 +8,23 @@
     <link rel="stylesheet" href="css/base.css">
     <link rel="stylesheet" href="css/staff.css">
     <script src="js/portal-auth.js"></script>
+    <!-- Staff only: anyone else is sent to the login page (or their own dashboard). -->
     <script>Portal.requireRole("Staff");</script>
     <script src="js/staff-dashboard.js" defer></script>
 </head>
 <body>
+
+    <!--
+        STAFF DASHBOARD
+        Shows today's bookings from the shared service queue.
+
+        Data: GET /api/Bookings/all (loaded by js/staff-dashboard.js).
+        The script refreshes automatically every minute.
+
+        Element ids filled in by the script:
+          pendingBookings, inProgressBookings, completedToday, houseCallsToday,
+          next-up (table body), last-updated, refresh-dashboard.
+    -->
 
     <header class="staff-header">
         <div class="header-content">
@@ -24,7 +36,7 @@
 
             <div class="staff-profile">
                 <span>Welcome, <span id="staffName"></span></span>
-                <a href="change_password.html">Change Password</a>
+                <a href="edit-profile.html">Edit Profile</a>
                 <a href="index.html">Logout</a>
             </div>
         </div>
@@ -38,7 +50,12 @@
 
         <section class="staff-overview">
             <h2>Today's Overview</h2>
-            <p>Bookings for today across the shared service queue.</p>
+            <p>Bookings for today across the shared service queue. Cancelled bookings are not counted.</p>
+
+            <div class="dashboard-actions">
+                <button type="button" id="refresh-dashboard">Refresh</button>
+                <span id="last-updated" role="status">Not updated yet</span>
+            </div>
 
             <div class="dashboard-cards">
 
@@ -67,7 +84,7 @@
 
         <section class="staff-next-up">
             <h2>Next Up Today</h2>
-            <p>Today's bookings in time order.</p>
+            <p>Today's bookings in time order. House call addresses are shown under the booking type.</p>
 
             <div class="table-container">
                 <table class="staff-table">

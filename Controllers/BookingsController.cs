@@ -1,5 +1,4 @@
-﻿
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SplashDash.Api.Data;
@@ -12,6 +11,16 @@ namespace SplashDash.Api.Controllers;
 [Route("api/[controller]")]
 public class BookingsController : ControllerBase
 {
+    // The only statuses a booking can have. Must match chk_booking_status in schema.sql.
+    private static readonly string[] AllowedStatuses =
+    {
+        "Pending",
+        "Confirmed",
+        "In Progress",
+        "Completed",
+        "Cancelled"
+    };
+
     private readonly AppDbContext _context;
 
     public BookingsController(AppDbContext context)
@@ -19,7 +28,10 @@ public class BookingsController : ControllerBase
         _context = context;
     }
 
+    // ------------------------------------------------------------
+    // CUSTOMER: view own bookings
     // Customers can view only their own bookings.
+    // ------------------------------------------------------------
     [Authorize(Roles = "Customer")]
     [HttpGet("my-bookings")]
     public async Task<IActionResult> GetCustomerBookings()
@@ -62,7 +74,12 @@ public class BookingsController : ControllerBase
         return Ok(bookings);
     }
 
-    // Staff and Admin can view the shared booking queue.
+    // ------------------------------------------------------------
+    // STAFF / ADMIN: shared booking queue
+    // Everyone shares one queue (no per-staff assignment).
+    // Used by the staff dashboard, staff service queue, admin
+    // bookings page and admin reports page.
+    // ------------------------------------------------------------
     [Authorize(Roles = "Staff,Admin")]
     [HttpGet("all")]
     public async Task<IActionResult> GetAllBookings()
@@ -88,6 +105,13 @@ public class BookingsController : ControllerBase
                 b.BookingAddress,
                 b.BookingStatus,
                 b.TotalAmount,
+                // Payment details (null until the customer pays in the app).
+                PaymentMethod = b.Payment == null
+                    ? null
+                    : b.Payment.PaymentMethod,
+                PaymentStatus = b.Payment == null
+                    ? null
+                    : b.Payment.PaymentStatus,
                 b.StaffId,
                 StaffName = b.Staff == null
                     ? null
@@ -98,7 +122,9 @@ public class BookingsController : ControllerBase
         return Ok(bookings);
     }
 
-    // Customer creates a booking.
+    // ------------------------------------------------------------
+    // CUSTOMER: create a booking
+    // ------------------------------------------------------------
     [Authorize(Roles = "Customer")]
     [HttpPost]
     public async Task<IActionResult> CreateBooking(
@@ -226,13 +252,32 @@ public class BookingsController : ControllerBase
         });
     }
 
-    // Staff and Admin can update booking status.
+    // ------------------------------------------------------------
+    // STAFF / ADMIN: move a booking to a new status (or cancel it)
+    //
+    // Business rules:
+    //   * Cancelled bookings are final. The customer must book again.
+    //   * Completed bookings can only be changed by an Admin, so a
+    //     staff member cannot reopen or cancel finished work.
+    // ------------------------------------------------------------
     [Authorize(Roles = "Staff,Admin")]
     [HttpPut("{id:int}/status")]
     public async Task<IActionResult> UpdateBookingStatus(
         int id,
         UpdateBookingStatusRequest request)
     {
+        // Accept any letter case from the client and normalise it.
+        string? newStatus = AllowedStatuses.FirstOrDefault(s =>
+            s.Equals(request.Status?.Trim(), StringComparison.OrdinalIgnoreCase));
+
+        if (newStatus == null)
+        {
+            return BadRequest(new
+            {
+                message = "Invalid booking status."
+            });
+        }
+
         var booking = await _context.Bookings
             .FirstOrDefaultAsync(b => b.BookingId == id);
 
@@ -244,36 +289,51 @@ public class BookingsController : ControllerBase
             });
         }
 
-        string[] allowedStatuses =
-        {
-            "Pending",
-            "Confirmed",
-            "In Progress",
-            "Completed",
-            "Cancelled"
-        };
+        string currentStatus = booking.BookingStatus;
 
-        if (!allowedStatuses.Contains(request.Status))
+        if (currentStatus == newStatus)
         {
-            return BadRequest(new
+            return Ok(new
             {
-                message = "Invalid booking status."
+                message = "The booking already has this status.",
+                booking.BookingId,
+                booking.BookingStatus
             });
         }
 
-        booking.BookingStatus = request.Status;
+        if (currentStatus == "Cancelled")
+        {
+            return BadRequest(new
+            {
+                message = "A cancelled booking cannot be changed. The customer needs to make a new booking."
+            });
+        }
+
+        if (currentStatus == "Completed" && !User.IsInRole("Admin"))
+        {
+            return BadRequest(new
+            {
+                message = "A completed booking can only be changed by an administrator."
+            });
+        }
+
+        booking.BookingStatus = newStatus;
 
         await _context.SaveChangesAsync();
 
         return Ok(new
         {
-            message = "Booking status updated successfully.",
+            message = newStatus == "Cancelled"
+                ? "Booking cancelled successfully."
+                : "Booking status updated successfully.",
             booking.BookingId,
             booking.BookingStatus
         });
     }
 
-    // Customer updates their own pending booking.
+    // ------------------------------------------------------------
+    // CUSTOMER: update own pending booking
+    // ------------------------------------------------------------
     [Authorize(Roles = "Customer")]
     [HttpPut("{id:int}")]
     public async Task<IActionResult> UpdateBooking(int id, CreateBookingRequest request)
@@ -320,7 +380,9 @@ public class BookingsController : ControllerBase
         return Ok(new { message = "Booking updated successfully." });
     }
 
-    // Customer cancels their own pending booking.
+    // ------------------------------------------------------------
+    // CUSTOMER: cancel own pending or confirmed booking
+    // ------------------------------------------------------------
     [Authorize(Roles = "Customer")]
     [HttpPut("{id:int}/cancel")]
     public async Task<IActionResult> CancelBooking(int id)

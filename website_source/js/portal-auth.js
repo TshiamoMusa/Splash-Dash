@@ -1,4 +1,3 @@
-
 /*
  * Splash & Dash - shared helpers for the staff and admin website.
  * Loaded on every portal page. Exposes one global: Portal.
@@ -9,11 +8,19 @@
 (function () {
     "use strict";
 
+    // Public address of the deployed API.
     var API_BASE = "https://splash-dash-api.onrender.com/api";
+
+    // Free-tier hosts put idle servers to sleep; the first request can take
+    // 30-60 seconds while the server starts. Allow for that before giving up.
+    var REQUEST_TIMEOUT_MS = 60000;
 
     var TOKEN_KEY = "sd_token";
     var ACCOUNT_KEY = "sd_account";
 
+    // ------------------------------------------------------------
+    // Session storage helpers
+    // ------------------------------------------------------------
     function getToken() {
         try {
             return sessionStorage.getItem(TOKEN_KEY);
@@ -44,6 +51,22 @@
         } catch (e) { }
     }
 
+    // Merges updated details (e.g. after saving on the Edit Profile page)
+    // into the stored account, so the welcome name stays current without
+    // logging in again.
+    function updateAccount(changes) {
+        try {
+            var account = getAccount() || {};
+
+            sessionStorage.setItem(
+                ACCOUNT_KEY,
+                JSON.stringify(Object.assign(account, changes))
+            );
+        } catch (e) { }
+    }
+
+    // Reads the expiry time inside the JWT (no signature check - the API
+    // does that). Anything unreadable is treated as expired.
     function isExpired(token) {
         try {
             var part = token.split(".")[1]
@@ -58,6 +81,11 @@
         }
     }
 
+    // ------------------------------------------------------------
+    // Navigation
+    // Super Admins are returned by the API with role "Admin"
+    // (isSuperAdmin = true), so they share the admin dashboard.
+    // ------------------------------------------------------------
     function homeFor(role) {
         return role === "Admin"
             ? "admin - dashboard.html"
@@ -69,6 +97,10 @@
         window.location.href = "index.html";
     }
 
+    // Call at the top of every protected page.
+    //   Portal.requireRole("Staff") - Staff only
+    //   Portal.requireRole("Admin") - Admin / Super Admin only
+    //   Portal.requireRole()        - any signed-in staff or admin
     function requireRole(role) {
         var token = getToken();
         var account = getAccount();
@@ -87,6 +119,11 @@
         return true;
     }
 
+    // ------------------------------------------------------------
+    // API requests
+    // Adds the JWT, applies a timeout and turns every failure into a
+    // readable Error message that pages can show to the user.
+    // ------------------------------------------------------------
     async function request(path, options) {
         options = options || {};
 
@@ -101,15 +138,36 @@
             headers.Authorization = "Bearer " + token;
         }
 
+        var controller = new AbortController();
+        var timer = setTimeout(function () {
+            controller.abort();
+        }, REQUEST_TIMEOUT_MS);
+
         var res;
 
         try {
             res = await fetch(API_BASE + path, Object.assign({}, options, {
-                headers: headers
+                headers: headers,
+                signal: controller.signal
             }));
         } catch (e) {
+            if (e && e.name === "AbortError") {
+                throw new Error(
+                    "The server is taking too long to respond. It may be starting up - please try again in a minute."
+                );
+            }
+
             throw new Error(
-                "Cannot reach the server. Check your internet connection or API availability."
+                "Cannot reach the server. Check your internet connection or try again shortly."
+            );
+        } finally {
+            clearTimeout(timer);
+        }
+
+        // Gateway errors mean the host is up but the API is still starting.
+        if (res.status === 502 || res.status === 503 || res.status === 504) {
+            throw new Error(
+                "The server is starting up. Please wait a moment and try again."
             );
         }
 
@@ -119,6 +177,9 @@
             data = await res.json();
         } catch (e) { }
 
+        // An expired or invalid session sends the user back to login.
+        // (A failed login has no token yet, so it falls through to the
+        // normal "Invalid username/email or password." message.)
         if (res.status === 401 && token) {
             clear();
             window.location.replace("login.html");
@@ -160,6 +221,11 @@
         });
     }
 
+    // ------------------------------------------------------------
+    // Login
+    // "identifier" is a username or an email address.
+    // Customers use the mobile app, so they are refused here.
+    // ------------------------------------------------------------
     async function login(identifier, password) {
         var data = await request("/auth/login", {
             method: "POST",
@@ -182,6 +248,9 @@
         return data.account;
     }
 
+    // ------------------------------------------------------------
+    // Shared page behaviour: welcome name and Logout links
+    // ------------------------------------------------------------
     document.addEventListener("DOMContentLoaded", function () {
         var account = getAccount();
 
@@ -211,6 +280,7 @@
     window.Portal = {
         API_BASE: API_BASE,
         getAccount: getAccount,
+        updateAccount: updateAccount,
         homeFor: homeFor,
         requireRole: requireRole,
         request: request,

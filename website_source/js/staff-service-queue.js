@@ -1,35 +1,68 @@
-﻿
+﻿/*
+ * Splash & Dash - Staff Service Queue
+ *
+ * Shows the shared booking queue, lets staff search and filter it, move a
+ * booking to a new status, or cancel it.
+ *
+ * Depends on js/portal-auth.js (Portal.get / Portal.put) and the element ids
+ * in "staff - service_queue.html".
+ *
+ * Booking rules (also enforced by the API, so they cannot be bypassed):
+ *   - Cancelled bookings are final.
+ *   - Completed bookings can only be changed by an administrator, so staff
+ *     see no actions for them.
+ */
 document.addEventListener("DOMContentLoaded", function () {
-    const filterForm = document.getElementById("booking-filter-form");
-    const bookingTable = document.getElementById("bookingQueue");
-    const clearButton = document.getElementById("clear-booking-filters");
+    "use strict";
 
+    // Number of columns in the queue table (used for full-width message rows).
+    const TABLE_COLUMNS = 9;
+
+    // Statuses staff can move a booking to. Cancelling has its own button.
+    const STATUS_OPTIONS = ["Pending", "Confirmed", "In Progress", "Completed"];
+
+    // Page elements
+    const filterForm = document.getElementById("booking-filter-form");
+    const searchInput = document.getElementById("booking-search");
+    const statusFilter = document.getElementById("booking-status");
+    const typeFilter = document.getElementById("booking-type");
+    const dateFilter = document.getElementById("booking-date");
+    const clearButton = document.getElementById("clear-booking-filters");
+    const refreshButton = document.getElementById("refresh-bookings");
+    const bookingTable = document.getElementById("bookingQueue");
+    const messageBox = document.getElementById("queue-message");
+
+    // Every booking returned by the API. Filtering happens in the browser.
     let bookings = [];
 
     loadBookings();
+
+    // ------------------------------------------------------------
+    // Filters
+    // ------------------------------------------------------------
 
     filterForm.addEventListener("submit", function (event) {
         event.preventDefault();
         displayBookings();
     });
 
-    document.getElementById("booking-search")
-        .addEventListener("input", displayBookings);
-
-    document.getElementById("booking-status")
-        .addEventListener("change", displayBookings);
-
-    document.getElementById("booking-type")
-        .addEventListener("change", displayBookings);
-
-    document.getElementById("booking-date")
-        .addEventListener("change", displayBookings);
+    searchInput.addEventListener("input", displayBookings);
+    statusFilter.addEventListener("change", displayBookings);
+    typeFilter.addEventListener("change", displayBookings);
+    dateFilter.addEventListener("change", displayBookings);
 
     clearButton.addEventListener("click", function () {
         filterForm.reset();
         displayBookings();
     });
 
+    refreshButton.addEventListener("click", loadBookings);
+
+    // ------------------------------------------------------------
+    // Actions (event delegation: one listener covers every table row)
+    // ------------------------------------------------------------
+
+    // "Save Status" form inside a row.
     bookingTable.addEventListener("submit", async function (event) {
         const form = event.target;
 
@@ -60,13 +93,13 @@ document.addEventListener("DOMContentLoaded", function () {
         }
     });
 
+    // "Cancel Booking" button inside a row.
     bookingTable.addEventListener("click", async function (event) {
         const button = event.target.closest("button[data-action='cancel']");
+
         if (!button) return;
 
-        const bookingId = button.dataset.bookingId;
-
-        if (!confirm("Are you sure you want to cancel this booking?")) {
+        if (!confirm("Are you sure you want to cancel this booking? This cannot be undone.")) {
             return;
         }
 
@@ -75,7 +108,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
         try {
             const result = await Portal.put(
-                "/Bookings/" + bookingId + "/status",
+                "/Bookings/" + button.dataset.bookingId + "/status",
                 { status: "Cancelled" }
             );
 
@@ -89,9 +122,14 @@ document.addEventListener("DOMContentLoaded", function () {
         }
     });
 
+    // ------------------------------------------------------------
+    // Loading
+    // ------------------------------------------------------------
+
+    // Fetches the full queue from the API and redraws the table.
     async function loadBookings() {
-        bookingTable.innerHTML =
-            "<tr><td colspan='8'>Loading bookings...</td></tr>";
+        refreshButton.disabled = true;
+        showMessageRow("Loading bookings...");
 
         try {
             const result = await Portal.get("/Bookings/all");
@@ -105,22 +143,26 @@ document.addEventListener("DOMContentLoaded", function () {
 
         } catch (error) {
             bookings = [];
-            bookingTable.innerHTML =
-                "<tr><td colspan='8'>Unable to load bookings.</td></tr>";
-
+            showMessageRow("Unable to load bookings.");
             showMessage(error.message, "error");
+
+        } finally {
+            refreshButton.disabled = false;
         }
     }
 
+    // ------------------------------------------------------------
+    // Table
+    // ------------------------------------------------------------
+
+    // Applies the search box and filters, then redraws the table.
     function displayBookings() {
-        const searchValue = document.getElementById("booking-search")
-            .value.trim().toLowerCase();
+        const searchValue = searchInput.value.trim().toLowerCase();
+        const statusValue = statusFilter.value;
+        const typeValue = typeFilter.value;
+        const dateValue = dateFilter.value;
 
-        const statusValue = document.getElementById("booking-status").value;
-        const typeValue = document.getElementById("booking-type").value;
-        const dateValue = document.getElementById("booking-date").value;
-
-        const filteredBookings = bookings.filter(function (booking) {
+        const filtered = bookings.filter(function (booking) {
             const bookingStatus = booking.bookingStatus || "";
             const bookingDate = new Date(booking.bookingDateTime);
 
@@ -134,6 +176,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
             const matchesSearch = searchableText.includes(searchValue);
 
+            // With no status chosen ("Active Bookings"), cancelled ones are hidden.
             const matchesStatus = statusValue
                 ? bookingStatus === statusValue
                 : bookingStatus !== "Cancelled";
@@ -148,57 +191,52 @@ document.addEventListener("DOMContentLoaded", function () {
             return matchesSearch && matchesStatus && matchesType && matchesDate;
         });
 
-        filteredBookings.sort(function (a, b) {
+        // Earliest booking first.
+        filtered.sort(function (a, b) {
             return new Date(a.bookingDateTime) - new Date(b.bookingDateTime);
         });
 
         bookingTable.replaceChildren();
 
-        if (filteredBookings.length === 0) {
-            const row = document.createElement("tr");
-            const cell = document.createElement("td");
-
-            cell.colSpan = 8;
-            cell.textContent = "No bookings match your selected filters.";
-
-            row.appendChild(cell);
-            bookingTable.appendChild(row);
+        if (filtered.length === 0) {
+            showMessageRow("No bookings match your selected filters.");
             return;
         }
 
-        filteredBookings.forEach(function (booking) {
+        filtered.forEach(function (booking) {
             bookingTable.appendChild(createBookingRow(booking));
         });
     }
 
+    // Builds one table row for a booking.
     function createBookingRow(booking) {
         const row = document.createElement("tr");
         const bookingDate = new Date(booking.bookingDateTime);
 
         addCell(row, booking.bookingId);
 
+        // Customer name with their phone number underneath.
         const customerCell = document.createElement("td");
         addStackedText(customerCell, booking.customerName, booking.customerPhone);
         row.appendChild(customerCell);
 
-        const vehicleCell = document.createElement("td");
-        addStackedText(vehicleCell, booking.vehicleType, null);
-        row.appendChild(vehicleCell);
-
+        addCell(row, booking.vehicleType);
         addCell(row, booking.service);
 
+        // House calls also show the address the team must travel to.
         const typeCell = document.createElement("td");
-        const bookingType = booking.locationType === "On-site"
-            ? "At Location"
-            : booking.locationType;
-
-        const serviceAddress = booking.locationType === "House Call"
-            ? booking.bookingAddress
-            : null;
-
-        addStackedText(typeCell, bookingType, serviceAddress);
+        addStackedText(
+            typeCell,
+            booking.locationType === "On-site"
+                ? "At Location"
+                : booking.locationType,
+            booking.locationType === "House Call"
+                ? booking.bookingAddress
+                : null
+        );
         row.appendChild(typeCell);
 
+        // Date with the time underneath.
         const dateCell = document.createElement("td");
 
         if (!isNaN(bookingDate.getTime())) {
@@ -217,34 +255,56 @@ document.addEventListener("DOMContentLoaded", function () {
 
         row.appendChild(dateCell);
 
+        // Payment: status with the method underneath. A booking has no payment
+        // record until the customer pays in the app.
+        const paymentCell = document.createElement("td");
+        addStackedText(
+            paymentCell,
+            booking.paymentStatus || "No payment yet",
+            booking.paymentMethod
+        );
+        row.appendChild(paymentCell);
+
         addCell(row, booking.bookingStatus);
 
         const actionsCell = document.createElement("td");
-        const actions = document.createElement("div");
-        actions.className = "row-actions";
-
-        if (booking.bookingStatus !== "Cancelled") {
-            actions.appendChild(createStatusForm(booking));
-
-            const cancelButton = document.createElement("button");
-            cancelButton.type = "button";
-            cancelButton.textContent = "Cancel Booking";
-            cancelButton.dataset.action = "cancel";
-            cancelButton.dataset.bookingId = booking.bookingId;
-
-            actions.appendChild(cancelButton);
-        } else {
-            const cancelledText = document.createElement("span");
-            cancelledText.textContent = "Cancelled";
-            actions.appendChild(cancelledText);
-        }
-
-        actionsCell.appendChild(actions);
+        actionsCell.appendChild(createActions(booking));
         row.appendChild(actionsCell);
 
         return row;
     }
 
+    // Staff may change a booking only while it is not Cancelled or Completed.
+    function createActions(booking) {
+        const actions = document.createElement("div");
+        actions.className = "row-actions";
+
+        if (booking.bookingStatus === "Cancelled" ||
+            booking.bookingStatus === "Completed") {
+
+            const note = document.createElement("span");
+            note.textContent = booking.bookingStatus === "Cancelled"
+                ? "Cancelled"
+                : "Completed";
+
+            actions.appendChild(note);
+            return actions;
+        }
+
+        actions.appendChild(createStatusForm(booking));
+
+        const cancelButton = document.createElement("button");
+        cancelButton.type = "button";
+        cancelButton.textContent = "Cancel Booking";
+        cancelButton.dataset.action = "cancel";
+        cancelButton.dataset.bookingId = booking.bookingId;
+
+        actions.appendChild(cancelButton);
+
+        return actions;
+    }
+
+    // Status drop-down and "Save Status" button for one booking.
     function createStatusForm(booking) {
         const form = document.createElement("form");
         form.dataset.action = "update-status";
@@ -254,14 +314,7 @@ document.addEventListener("DOMContentLoaded", function () {
         statusSelect.name = "status";
         statusSelect.setAttribute("aria-label", "Update booking status");
 
-        const statuses = [
-            "Pending",
-            "Confirmed",
-            "In Progress",
-            "Completed"
-        ];
-
-        statuses.forEach(function (status) {
+        STATUS_OPTIONS.forEach(function (status) {
             const option = document.createElement("option");
             option.value = status;
             option.textContent = status;
@@ -278,6 +331,11 @@ document.addEventListener("DOMContentLoaded", function () {
         return form;
     }
 
+    // ------------------------------------------------------------
+    // Helpers
+    // ------------------------------------------------------------
+
+    // Adds a plain text cell. Text is inserted with textContent, never as HTML.
     function addCell(row, value) {
         const cell = document.createElement("td");
 
@@ -288,6 +346,7 @@ document.addEventListener("DOMContentLoaded", function () {
         row.appendChild(cell);
     }
 
+    // Fills a cell with a main line and an optional smaller second line.
     function addStackedText(cell, mainText, subText) {
         const main = document.createElement("span");
         main.className = "cell-main";
@@ -302,6 +361,21 @@ document.addEventListener("DOMContentLoaded", function () {
         }
     }
 
+    // A single full-width row used for loading, empty and error messages.
+    function showMessageRow(text) {
+        bookingTable.replaceChildren();
+
+        const row = document.createElement("tr");
+        const cell = document.createElement("td");
+
+        cell.colSpan = TABLE_COLUMNS;
+        cell.textContent = text;
+
+        row.appendChild(cell);
+        bookingTable.appendChild(row);
+    }
+
+    // Returns the browser's local calendar date as YYYY-MM-DD.
     function getLocalDateKey(date) {
         const year = date.getFullYear();
         const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -310,17 +384,9 @@ document.addEventListener("DOMContentLoaded", function () {
         return year + "-" + month + "-" + day;
     }
 
+    // Success / error message above the table. type: "success" or "error".
     function showMessage(message, type) {
-        let messageElement = document.getElementById("queue-message");
-
-        if (!messageElement) {
-            messageElement = document.createElement("p");
-            messageElement.id = "queue-message";
-            messageElement.setAttribute("role", "status");
-            bookingTable.parentElement.before(messageElement);
-        }
-
-        messageElement.textContent = message;
-        messageElement.className = type ? "message " + type : "";
+        messageBox.textContent = message;
+        messageBox.className = type ? "message " + type : "";
     }
 });

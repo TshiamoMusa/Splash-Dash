@@ -54,8 +54,8 @@ object ApiClient {
 
     private const val TAG = "SplashDashApi"
 
-    // Deployed API on Render (same one the website uses).
-    private const val BASE_URL = "https://splash-dash-api.onrender.com/api"
+    // UPDATED: Pointing to your live Render backend service URL (matches the website backend).
+    private const val BASE_URL = "https://splash-dash-api-vxly.onrender.com/api"
 
     // Render's free tier sleeps when idle; the first request can take 30-60 seconds.
     private const val TIMEOUT_MS = 60_000

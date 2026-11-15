@@ -1,249 +1,196 @@
 package com.example.splashanddash
 
-import android.app.AlertDialog
-import android.app.DatePickerDialog
 import android.os.Bundle
-import android.widget.ArrayAdapter
-import android.widget.EditText
+import android.graphics.Typeface
 import android.widget.LinearLayout
-import android.widget.Spinner
+import android.widget.TextView
+import androidx.appcompat.app.AlertDialog
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Locale
 
+/** Lists the customer's bookings (upcoming and past) with pay, edit and cancel actions. */
 class BookingHistoryActivity : BaseActivity() {
+
+    private lateinit var listContainer: LinearLayout
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        if (ApiClient.getToken(this).isNullOrBlank()) {
-            go(LoginActivity::class.java)
-            finish()
-            return
-        }
+        val screen = content()
+        val main = column()
 
-        loadBookings()
+        main.addView(backLink())
+        main.addView(pageHeader("My bookings", "View, edit or cancel your bookings"))
+
+        main.addView(
+            button("Book a car wash") { go(BookingActivity::class.java) }
+        )
+
+        listContainer = column(0)
+        main.addView(listContainer)
+
+        main.addView(footer())
+
+        screen.addView(main)
+        setContentView(screen)
     }
 
     override fun onResume() {
         super.onResume()
-
         if (!ApiClient.getToken(this).isNullOrBlank()) {
             loadBookings()
         }
     }
 
+    private fun gap(top: Int = 12): LinearLayout.LayoutParams {
+        return LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { setMargins(0, dp(top), 0, 0) }
+    }
+
     private fun loadBookings() {
-
-        val screen = content()
-        val main = column()
-
-        main.addView(
-            sectionTitle(
-                "My Bookings",
-                "View, edit, or cancel your bookings"
-            )
-        )
-
-        main.addView(
-            text("Loading your bookings from PostgreSQL database...", 16f)
-        )
-
-        screen.addView(main)
-        setContentView(screen)
+        listContainer.removeAllViews()
+        listContainer.addView(text("Loading your bookings…", 15f, false, muted))
 
         lifecycleScope.launch {
             val result = ApiClient.getCustomerBookings(this@BookingHistoryActivity)
+            if (isFinishing || isDestroyed) return@launch
 
-            runOnUiThread {
-                if (isFinishing || isDestroyed) return@runOnUiThread
+            listContainer.removeAllViews()
 
-                main.removeAllViews()
-
-                main.addView(
-                    sectionTitle(
-                        "My Bookings",
-                        "Your database booking history & management"
-                    )
+            if (result.isFailure) {
+                listContainer.addView(
+                    text(result.exceptionOrNull()?.message ?: "Could not load your bookings.", 15f, false, danger)
                 )
+                listContainer.addView(outlineButton("Retry") { loadBookings() })
+                return@launch
+            }
 
-                if (result.isSuccess) {
-                    val bookings = result.getOrNull() ?: emptyList()
+            val bookings = result.getOrNull() ?: emptyList()
 
-                    if (bookings.isEmpty()) {
-                        main.addView(
-                            text("You have no bookings yet.", 17f)
-                        )
-                    } else {
-                        main.addView(
-                            text("Total Bookings: ${bookings.size}", 18f, true)
-                        )
-
-                        bookings.forEach { booking ->
-                            val details = """
-                                Service: ${booking.service}
-                                Vehicle: ${booking.vehicleType}
-                                Date/Time: ${booking.bookingDateTime}
-                                Location: ${booking.locationType} ${if (!booking.bookingAddress.isNullOrBlank()) "(${booking.bookingAddress})" else ""}
-                                Amount: R${booking.totalAmount}
-                                Status: ${booking.bookingStatus}
-                            """.trimIndent()
-
-                            val bookingCard = card("Booking #${booking.bookingId}", details)
-
-                            // Allow editing or cancelling pending bookings
-                            if (booking.bookingStatus.equals("Pending", ignoreCase = true)) {
-
-                                // EDIT BUTTON
-                                bookingCard.addView(
-                                    button("EDIT BOOKING") {
-                                        showEditDialog(booking)
-                                    }
-                                )
-
-                                // CANCEL BUTTON
-                                bookingCard.addView(
-                                    outlineButton("CANCEL BOOKING") {
-                                        AlertDialog.Builder(this@BookingHistoryActivity)
-                                            .setTitle("Cancel Booking")
-                                            .setMessage("Are you sure you want to cancel Booking #${booking.bookingId}?")
-                                            .setPositiveButton("YES, CANCEL") { _, _ ->
-                                                lifecycleScope.launch {
-                                                    val cancelResult = ApiClient.cancelBooking(
-                                                        this@BookingHistoryActivity,
-                                                        booking.bookingId
-                                                    )
-                                                    runOnUiThread {
-                                                        if (cancelResult.isSuccess) {
-                                                            showAppMessage("Booking #${booking.bookingId} cancelled successfully.")
-                                                            loadBookings()
-                                                        } else {
-                                                            showAppMessage(cancelResult.exceptionOrNull()?.message ?: "Could not cancel booking.")
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                            .setNegativeButton("NO", null)
-                                            .show()
-                                    }
-                                )
-                            }
-
-                            main.addView(bookingCard)
-                        }
-                    }
-                } else {
-                    main.addView(
-                        text("Error: ${result.exceptionOrNull()?.message ?: "Could not load bookings"}", 16f)
-                    )
-                }
-
-                main.addView(
-                    button("BOOK ANOTHER SERVICE") {
-                        go(BookingActivity::class.java)
-                    }
+            if (bookings.isEmpty()) {
+                listContainer.addView(
+                    card(
+                        "No bookings yet",
+                        "Book your first wash and it will show up here.",
+                        "Book now"
+                    ) { go(BookingActivity::class.java) }
                 )
+                return@launch
+            }
 
-                main.addView(
-                    outlineButton("REFRESH BOOKINGS") {
-                        loadBookings()
-                    }
-                )
+            val activeStatuses = setOf("pending", "confirmed", "in progress")
 
-                main.addView(
-                    outlineButton("BACK TO DASHBOARD") {
-                        go(CustomerDashboardActivity::class.java)
-                        finish()
-                    }
-                )
+            val upcoming = bookings
+                .filter { it.bookingStatus.lowercase() in activeStatuses }
+                .sortedBy { ApiClient.parseApiDate(it.bookingDateTime)?.time ?: Long.MAX_VALUE }
 
-                main.addView(footer())
+            val past = bookings.filter { it.bookingStatus.lowercase() !in activeStatuses }
+
+            if (upcoming.isNotEmpty()) {
+                listContainer.addView(sectionTitle("Upcoming"))
+                upcoming.forEach { listContainer.addView(bookingCard(it)) }
+            }
+
+            if (past.isNotEmpty()) {
+                listContainer.addView(sectionTitle("Past"))
+                past.forEach { listContainer.addView(bookingCard(it)) }
             }
         }
     }
 
-    private fun showEditDialog(booking: BookingItem) {
-        lifecycleScope.launch {
-            val servicesResult = ApiClient.getServices()
-            runOnUiThread {
-                if (!servicesResult.isSuccess) {
-                    showAppMessage("Could not load services for editing.")
-                    return@runOnUiThread
-                }
-
-                val services = servicesResult.getOrNull() ?: emptyList()
-                if (services.isEmpty()) {
-                    showAppMessage("No services available.")
-                    return@runOnUiThread
-                }
-
-                val dialogLayout = LinearLayout(this@BookingHistoryActivity).apply {
-                    orientation = LinearLayout.VERTICAL
-                    setPadding(32, 24, 32, 24)
-                }
-
-                val vehicleTypes = arrayOf("Small Car", "Large Car", "SUV", "Bakkie")
-                val vehicleSpinner = Spinner(this@BookingHistoryActivity)
-                vehicleSpinner.adapter = ArrayAdapter(this@BookingHistoryActivity, android.R.layout.simple_spinner_dropdown_item, vehicleTypes)
-                dialogLayout.addView(text("Vehicle Type", 14f, true))
-                dialogLayout.addView(vehicleSpinner)
-
-                val serviceNames = services.map { "${it.serviceName} — R${it.price}" }
-                val serviceSpinner = Spinner(this@BookingHistoryActivity)
-                serviceSpinner.adapter = ArrayAdapter(this@BookingHistoryActivity, android.R.layout.simple_spinner_dropdown_item, serviceNames)
-                dialogLayout.addView(text("Service Package", 14f, true))
-                dialogLayout.addView(serviceSpinner)
-
-                val dateInput = EditText(this@BookingHistoryActivity).apply {
-                    hint = "Date (YYYY-MM-DD)"
-                    setText(booking.bookingDateTime.take(10))
-                }
-                dialogLayout.addView(text("Booking Date", 14f, true))
-                dialogLayout.addView(dateInput)
-
-                val timeInput = EditText(this@BookingHistoryActivity).apply {
-                    hint = "Time (HH:mm)"
-                    setText(booking.bookingDateTime.substringAfter("T").take(5))
-                }
-                dialogLayout.addView(text("Booking Time", 14f, true))
-                dialogLayout.addView(timeInput)
-
-                AlertDialog.Builder(this@BookingHistoryActivity)
-                    .setTitle("Edit Booking #${booking.bookingId}")
-                    .setView(dialogLayout)
-                    .setPositiveButton("SAVE CHANGES") { _, _ ->
-                        val vehicle = vehicleSpinner.selectedItem.toString()
-                        val serviceItem = services[serviceSpinner.selectedItemPosition]
-                        val date = dateInput.text.toString().trim()
-                        val time = timeInput.text.toString().trim()
-                        val dateTimeIso = "${date}T${time}:00Z"
-
-                        lifecycleScope.launch {
-                            val updateResult = ApiClient.updateBooking(
-                                context = this@BookingHistoryActivity,
-                                bookingId = booking.bookingId,
-                                serviceId = serviceItem.serviceId,
-                                vehicleType = vehicle,
-                                bookingDateTime = dateTimeIso,
-                                locationType = booking.locationType,
-                                bookingAddress = booking.bookingAddress
-                            )
-
-                            runOnUiThread {
-                                if (updateResult.isSuccess) {
-                                    showAppMessage("Booking updated successfully!")
-                                    loadBookings()
-                                } else {
-                                    showAppMessage(updateResult.exceptionOrNull()?.message ?: "Could not update booking.")
-                                }
-                            }
-                        }
-                    }
-                    .setNegativeButton("CANCEL", null)
-                    .show()
-            }
+    private fun bookingCard(booking: BookingItem): LinearLayout {
+        val container = card().apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { setMargins(dp(2), dp(6), dp(2), dp(14)) }
         }
+
+        // Service name + status
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+        }
+        val title = TextView(this).apply {
+            text = booking.service
+            textSize = 18f
+            setTextColor(heading)
+            typeface = Typeface.DEFAULT_BOLD
+        }
+        header.addView(
+            title,
+            LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        )
+        header.addView(statusBadge(booking.bookingStatus))
+        container.addView(header)
+
+        // Details
+        container.addView(text(ApiClient.displayDate(booking.bookingDateTime), 15f, true))
+        container.addView(text("${booking.vehicleType}  ·  ${booking.locationType}", 14f, false, muted))
+
+        if (!booking.bookingAddress.isNullOrBlank()) {
+            container.addView(text(booking.bookingAddress, 14f, false, muted))
+        }
+
+        container.addView(text(money(booking.totalAmount), 17f, true, accent))
+
+        val status = booking.bookingStatus.lowercase()
+        val canEdit = status == "pending"
+        val canCancel = status == "pending" || status == "confirmed"
+
+        if (canEdit) {
+            container.addView(
+                button("Pay now") { go(PaymentActivity::class.java) },
+                gap()
+            )
+        }
+
+        if (canEdit || canCancel) {
+            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+
+            if (canEdit) {
+                row.addView(
+                    outlineButton("Edit") {
+                        startActivity(BookingActivity.editIntent(this, booking))
+                    },
+                    LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                        .apply { setMargins(0, 0, dp(6), 0) }
+                )
+            }
+
+            if (canCancel) {
+                row.addView(
+                    dangerButton("Cancel") { confirmCancel(booking) },
+                    LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                        .apply { setMargins(if (canEdit) dp(6) else 0, 0, 0, 0) }
+                )
+            }
+
+            container.addView(row, gap(8))
+        }
+
+        return container
+    }
+
+    private fun confirmCancel(booking: BookingItem) {
+        AlertDialog.Builder(this)
+            .setTitle("Cancel booking")
+            .setMessage("Are you sure you want to cancel this ${booking.service} booking?")
+            .setPositiveButton("Yes, cancel") { _, _ ->
+                lifecycleScope.launch {
+                    val result = ApiClient.cancelBooking(this@BookingHistoryActivity, booking.bookingId)
+                    if (isFinishing || isDestroyed) return@launch
+
+                    if (result.isSuccess) {
+                        loadBookings()
+                    } else {
+                        showAppMessage(result.exceptionOrNull()?.message ?: "Could not cancel booking.")
+                    }
+                }
+            }
+            .setNegativeButton("Keep it", null)
+            .show()
     }
 }

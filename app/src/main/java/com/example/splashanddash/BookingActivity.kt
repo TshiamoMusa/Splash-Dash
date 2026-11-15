@@ -1,189 +1,325 @@
 package com.example.splashanddash
 
 import android.app.DatePickerDialog
+import android.app.TimePickerDialog
+import android.content.Context
+import android.content.Intent
 import android.os.Bundle
-import android.widget.ArrayAdapter
-import android.widget.Spinner
-import android.widget.LinearLayout
+import android.view.View
+import androidx.appcompat.app.AlertDialog
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
+/**
+ * Book a car wash. The same screen is used to edit a pending booking
+ * (open it with BookingActivity.editIntent(...)).
+ */
 class BookingActivity : BaseActivity() {
 
-    private var servicesList: List<ServiceItem> = emptyList()
+    companion object {
+        private const val EXTRA_BOOKING_ID = "booking_id"
+        private const val EXTRA_SERVICE = "booking_service"
+        private const val EXTRA_VEHICLE = "booking_vehicle"
+        private const val EXTRA_DATETIME = "booking_datetime"
+        private const val EXTRA_LOCATION = "booking_location"
+        private const val EXTRA_ADDRESS = "booking_address"
+
+        // Working hours (minutes since midnight)
+        private const val OPEN_MINUTES = 8 * 60
+        private const val LAST_START_ON_SITE = 18 * 60
+        private const val LAST_START_HOUSE_CALL = 17 * 60
+
+        /** Intent that opens this screen pre-filled to edit an existing booking. */
+        fun editIntent(context: Context, booking: BookingItem): Intent {
+            return Intent(context, BookingActivity::class.java).apply {
+                putExtra(EXTRA_BOOKING_ID, booking.bookingId)
+                putExtra(EXTRA_SERVICE, booking.service)
+                putExtra(EXTRA_VEHICLE, booking.vehicleType)
+                putExtra(EXTRA_DATETIME, booking.bookingDateTime)
+                putExtra(EXTRA_LOCATION, booking.locationType)
+                putExtra(EXTRA_ADDRESS, booking.bookingAddress ?: "")
+            }
+        }
+    }
+
+    private var services: List<ServiceItem> = emptyList()
+    private var serviceGroup: ChoiceGroup? = null
+    private var isSubmitting = false
+
+    // Date and time chosen by the customer
+    private val chosenDate: Calendar = Calendar.getInstance()
+    private var dateChosen = false
+    private var chosenHour = -1
+    private var chosenMinute = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Ensure user is logged in
-        if (ApiClient.getToken(this).isNullOrBlank()) {
-            go(LoginActivity::class.java)
-            finish()
-            return
-        }
+        val editId = intent.getIntExtra(EXTRA_BOOKING_ID, -1)
+        val isEdit = editId != -1
+
+        val prefillService = intent.getStringExtra(EXTRA_SERVICE) ?: ""
+        val prefillVehicle = intent.getStringExtra(EXTRA_VEHICLE) ?: ""
+        val prefillLocation = intent.getStringExtra(EXTRA_LOCATION) ?: ""
+        val prefillAddress = intent.getStringExtra(EXTRA_ADDRESS) ?: ""
+
+        val locationValues = listOf(ApiClient.LOCATION_ON_SITE, ApiClient.LOCATION_HOUSE_CALL)
+        val locationLabels = listOf("On-site", "House call")
+        val dateFormat = SimpleDateFormat("EEE, d MMM yyyy", Locale.getDefault())
 
         val screen = content()
         val main = column()
 
+        main.addView(backLink())
         main.addView(
-            sectionTitle(
-                "Book a Car Wash",
-                "Schedule your SplashDash service"
+            pageHeader(
+                if (isEdit) "Edit booking" else "Book a car wash",
+                "Choose your vehicle, service and time"
             )
         )
 
-        // Vehicle Selection
-        main.addView(text("Vehicle Type", 17f, true))
-        val vehicles = listOf("Small Car", "Large Car", "SUV", "Bakkie")
-        val vehicleSpinner = Spinner(this)
-        vehicleSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, vehicles)
-        main.addView(vehicleSpinner)
+        // VEHICLE
+        main.addView(sectionTitle("Vehicle"))
+        val vehicleGroup = choiceGroup(
+            ApiClient.VEHICLE_TYPES,
+            2,
+            ApiClient.VEHICLE_TYPES.indexOf(prefillVehicle).coerceAtLeast(0)
+        )
+        main.addView(vehicleGroup.view)
 
-        val registration = input("Vehicle Registration (e.g. AB12CD GP)")
-        main.addView(registration)
+        // LOCATION
+        main.addView(sectionTitle("Location"))
+        val initialLocation = locationValues.indexOf(prefillLocation).coerceAtLeast(0)
+        val addressField = input("House-call address (blank = your home address)")
+        val hoursHint = text(hoursMessage(initialLocation == 1), 13f, false, muted)
 
-        // Location Type Selection
-        main.addView(text("Service Location Type", 17f, true))
-        val locations = listOf("On-site", "House Call")
-        val locationSpinner = Spinner(this)
-        locationSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, locations)
-        main.addView(locationSpinner)
+        addressField.setText(prefillAddress)
+        addressField.visibility = if (initialLocation == 1) View.VISIBLE else View.GONE
 
-        val addressField = input("House Call Address (Optional)")
+        val locationGroup = choiceGroup(locationLabels, 2, initialLocation) { index ->
+            addressField.visibility = if (index == 1) View.VISIBLE else View.GONE
+            hoursHint.text = hoursMessage(index == 1)
+        }
+        main.addView(locationGroup.view)
         main.addView(addressField)
 
-        // Service Selection Spinner Placeholder
-        main.addView(text("Select Service", 17f, true))
-        val serviceSpinner = Spinner(this)
-        main.addView(serviceSpinner)
+        // SERVICE
+        main.addView(sectionTitle("Service"))
+        val serviceStatus = text("Loading services…", 14f, false, muted)
+        val serviceHolder = column(0)
+        main.addView(serviceStatus)
+        main.addView(serviceHolder)
 
-        val serviceInfoText = text("Loading services...", 14f)
-        main.addView(serviceInfoText)
-
-        // Fetch services from API
         lifecycleScope.launch {
             val result = ApiClient.getServices()
-            runOnUiThread {
-                if (result.isSuccess) {
-                    servicesList = result.getOrNull() ?: emptyList()
-                    if (servicesList.isNotEmpty()) {
-                        val names = servicesList.map { "${it.serviceName} - R${it.price}" }
-                        serviceSpinner.adapter = ArrayAdapter(
-                            this@BookingActivity,
-                            android.R.layout.simple_spinner_dropdown_item,
-                            names
-                        )
-                        serviceInfoText.text = "Select one of our professional services above."
-                    } else {
-                        serviceInfoText.text = "No services available."
-                    }
+            if (isFinishing || isDestroyed) return@launch
+
+            if (result.isSuccess) {
+                services = result.getOrNull() ?: emptyList()
+
+                if (services.isEmpty()) {
+                    serviceStatus.text = "No services available right now."
                 } else {
-                    serviceInfoText.text = "Could not load services from server."
+                    serviceStatus.visibility = View.GONE
+                    val labels = services.map { "${it.serviceName}  ·  ${money(it.price)}" }
+                    val initial = services.indexOfFirst { it.serviceName == prefillService }
+                        .coerceAtLeast(0)
+                    val group = choiceGroup(labels, 1, initial)
+                    serviceGroup = group
+                    serviceHolder.addView(group.view)
                 }
+            } else {
+                serviceStatus.text = result.exceptionOrNull()?.message ?: "Could not load services."
             }
         }
 
-        // Date Picker
-        val dateField = input("Booking Date (YYYY-MM-DD)")
-        dateField.isFocusable = false
-        dateField.isClickable = true
-        val calendar = Calendar.getInstance()
+        // DATE & TIME
+        main.addView(sectionTitle("Date & time"))
+        val dateField = input("Choose a date")
+        val timeField = input("Choose a time")
+        listOf(dateField, timeField).forEach {
+            it.isFocusable = false
+            it.isClickable = true
+            it.isCursorVisible = false
+        }
+
+        // Pre-fill when editing
+        ApiClient.parseApiDate(intent.getStringExtra(EXTRA_DATETIME) ?: "")?.let { date ->
+            val cal = Calendar.getInstance().apply { time = date }
+            chosenDate.timeInMillis = cal.timeInMillis
+            dateChosen = true
+            chosenHour = cal.get(Calendar.HOUR_OF_DAY)
+            chosenMinute = cal.get(Calendar.MINUTE)
+            dateField.setText(dateFormat.format(date))
+            timeField.setText(String.format(Locale.US, "%02d:%02d", chosenHour, chosenMinute))
+        }
 
         dateField.setOnClickListener {
-            val today = Calendar.getInstance()
             val picker = DatePickerDialog(
                 this,
                 { _, year, month, day ->
-                    calendar.set(year, month, day, 9, 0, 0)
-                    dateField.setText(SimpleDateFormat("yyyy-MM-dd", Locale.US).format(calendar.time))
+                    chosenDate.set(year, month, day)
+                    dateChosen = true
+                    dateField.setText(dateFormat.format(chosenDate.time))
                 },
-                today.get(Calendar.YEAR),
-                today.get(Calendar.MONTH),
-                today.get(Calendar.DAY_OF_MONTH)
+                chosenDate.get(Calendar.YEAR),
+                chosenDate.get(Calendar.MONTH),
+                chosenDate.get(Calendar.DAY_OF_MONTH)
             )
-            picker.datePicker.minDate = today.timeInMillis
+            picker.datePicker.minDate = System.currentTimeMillis() - 1000
             picker.show()
         }
+
+        timeField.setOnClickListener {
+            TimePickerDialog(
+                this,
+                { _, hour, minute ->
+                    chosenHour = hour
+                    chosenMinute = minute
+                    timeField.setText(String.format(Locale.US, "%02d:%02d", hour, minute))
+                },
+                if (chosenHour >= 0) chosenHour else 9,
+                chosenMinute,
+                true
+            ).show()
+        }
+
         main.addView(dateField)
-
-        // Time Input
-        val timeField = input("Time (HH:mm, e.g. 10:30)")
         main.addView(timeField)
+        main.addView(hoursHint)
+        addSpacing(main, 12)
 
-        // Submit Button
-        val submitButton = button("CONFIRM BOOKING") {
-            val vehicleType = vehicleSpinner.selectedItem?.toString() ?: "Small Car"
-            val reg = registration.text.toString().trim()
-            val locationType = locationSpinner.selectedItem?.toString() ?: "On-site"
-            val address = addressField.text.toString().trim()
-            val date = dateField.text.toString().trim()
-            val time = timeField.text.toString().trim()
-            val selectedServiceIndex = serviceSpinner.selectedItemPosition
+        // SUBMIT
+        main.addView(
+            button(if (isEdit) "Save changes" else "Confirm booking") {
 
-            val timePattern = Regex("^([01]\\d|2[0-3]):[0-5]\\d$")
+                if (isSubmitting) return@button
 
-            when {
-                servicesList.isEmpty() -> showMessage("Services are still loading. Please wait.")
-                reg.isBlank() -> showMessage("Enter your vehicle registration.")
-                date.isBlank() -> showMessage("Please select a booking date.")
-                !timePattern.matches(time) -> showMessage("Enter a valid time in HH:mm format (e.g. 10:30).")
-                else -> {
-                    val serviceItem = servicesList.getOrNull(selectedServiceIndex) ?: servicesList.first()
-                    val dateTimeIso = "${date}T${time}:00Z"
+                val isHouseCall = locationGroup.index == 1
+                val locationType = locationValues[locationGroup.index]
+                val minutes = chosenHour * 60 + chosenMinute
+                val lastStart = if (isHouseCall) LAST_START_HOUSE_CALL else LAST_START_ON_SITE
+                val group = serviceGroup
+                val service = group?.let { services.getOrNull(it.index) }
 
-                    lifecycleScope.launch {
-                        val bookingResult = ApiClient.createBooking(
-                            context = this@BookingActivity,
-                            serviceId = serviceItem.serviceId,
-                            vehicleType = vehicleType,
-                            bookingDateTime = dateTimeIso,
-                            locationType = locationType,
-                            bookingAddress = if (address.isBlank()) null else address
-                        )
+                val scheduled = Calendar.getInstance().apply {
+                    set(
+                        chosenDate.get(Calendar.YEAR),
+                        chosenDate.get(Calendar.MONTH),
+                        chosenDate.get(Calendar.DAY_OF_MONTH),
+                        chosenHour.coerceAtLeast(0),
+                        chosenMinute,
+                        0
+                    )
+                    set(Calendar.MILLISECOND, 0)
+                }
 
-                        runOnUiThread {
-                            if (bookingResult.isSuccess) {
-                                android.app.AlertDialog.Builder(this@BookingActivity)
-                                    .setTitle("Booking Confirmed")
-                                    .setMessage("Your booking has been saved to the shared PostgreSQL database successfully!")
-                                    .setPositiveButton("VIEW MY BOOKINGS") { _, _ ->
-                                        go(BookingHistoryActivity::class.java)
-                                        finish()
-                                    }
-                                    .show()
-                            } else {
-                                showMessage(bookingResult.exceptionOrNull()?.message ?: "Could not create booking.")
-                            }
+                when {
+                    service == null ->
+                        showAppMessage("Services are still loading. Please wait a moment.")
+
+                    !dateChosen -> showAppMessage("Please choose a date.")
+
+                    chosenHour < 0 -> showAppMessage("Please choose a time.")
+
+                    minutes < OPEN_MINUTES || minutes > lastStart ->
+                        showAppMessage(hoursMessage(isHouseCall))
+
+                    scheduled.timeInMillis <= System.currentTimeMillis() ->
+                        showAppMessage("Please choose a time in the future.")
+
+                    else -> {
+                        val address = if (isHouseCall) {
+                            addressField.text.toString().trim().ifBlank { null }
+                        } else {
+                            null
                         }
+
+                        submitBooking(
+                            editId = editId,
+                            service = service,
+                            vehicle = ApiClient.VEHICLE_TYPES[vehicleGroup.index],
+                            scheduled = scheduled,
+                            locationType = locationType,
+                            address = address
+                        )
                     }
                 }
             }
-        }
-
-        main.addView(submitButton)
-
-        main.addView(outlineButton("VIEW MY BOOKINGS") {
-            go(BookingHistoryActivity::class.java)
-        })
-
-        main.addView(outlineButton("BACK TO DASHBOARD") {
-            go(CustomerDashboardActivity::class.java)
-            finish()
-        })
+        )
 
         main.addView(footer())
         screen.addView(main)
         setContentView(screen)
     }
 
-    private fun showMessage(message: String) {
-        android.app.AlertDialog.Builder(this)
-            .setTitle("SplashDash")
-            .setMessage(message)
-            .setPositiveButton("OK", null)
-            .show()
+    private fun hoursMessage(isHouseCall: Boolean): String {
+        return if (isHouseCall) {
+            "House calls are available from 08:00 to 17:00."
+        } else {
+            "On-site bookings are available from 08:00 to 18:00."
+        }
+    }
+
+    private fun submitBooking(
+        editId: Int,
+        service: ServiceItem,
+        vehicle: String,
+        scheduled: Calendar,
+        locationType: String,
+        address: String?
+    ) {
+        isSubmitting = true
+
+        // Includes the time zone so the booking keeps the time the customer picked.
+        val dateTime = ApiClient.formatForApi(scheduled.time)
+
+        lifecycleScope.launch {
+            val result = if (editId != -1) {
+                ApiClient.updateBooking(
+                    this@BookingActivity, editId, service.serviceId,
+                    vehicle, dateTime, locationType, address
+                )
+            } else {
+                ApiClient.createBooking(
+                    this@BookingActivity, service.serviceId,
+                    vehicle, dateTime, locationType, address
+                )
+            }
+
+            isSubmitting = false
+            if (isFinishing || isDestroyed) return@launch
+
+            if (result.isFailure) {
+                showAppMessage(result.exceptionOrNull()?.message ?: "Could not save your booking.")
+                return@launch
+            }
+
+            if (editId != -1) {
+                AlertDialog.Builder(this@BookingActivity)
+                    .setTitle("Booking updated")
+                    .setMessage("Your changes were saved.")
+                    .setCancelable(false)
+                    .setPositiveButton("OK") { _, _ -> finish() }
+                    .show()
+            } else {
+                AlertDialog.Builder(this@BookingActivity)
+                    .setTitle("Booking created")
+                    .setMessage("Your booking is pending until you pay for it.")
+                    .setCancelable(false)
+                    .setPositiveButton("Pay now") { _, _ ->
+                        go(PaymentActivity::class.java)
+                        finish()
+                    }
+                    .setNegativeButton("My bookings") { _, _ ->
+                        go(BookingHistoryActivity::class.java)
+                        finish()
+                    }
+                    .show()
+            }
+        }
     }
 }

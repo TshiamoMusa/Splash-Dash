@@ -16,9 +16,15 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import java.util.Locale
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
+
+/** A row/grid of tappable choices (chips). `index` is the selected option. */
+class ChoiceGroup(val view: LinearLayout) {
+    var index: Int = 0
+}
 
 /**
  * Base class for every screen in the Splash & Dash customer app.
@@ -504,6 +510,151 @@ open class BaseActivity : AppCompatActivity() {
     // ---------------------------------------------------------
     // Spacing & footer
     // ---------------------------------------------------------
+
+    // ---------------------------------------------------------
+    // Form & list helpers
+    // ---------------------------------------------------------
+
+    private fun withAlpha(color: Int, alpha: Int): Int {
+        return Color.argb(alpha, Color.red(color), Color.green(color), Color.blue(color))
+    }
+
+    /** "‹ Back" link for the top of every screen except the dashboard. */
+    protected fun backLink(label: String = "Back"): TextView {
+        return TextView(this).apply {
+            text = "‹  $label"
+            textSize = 16f
+            setTextColor(accent)
+            typeface = Typeface.DEFAULT_BOLD
+            setPadding(dp(4), dp(8), dp(16), dp(8))
+            isClickable = true
+            isFocusable = true
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+            setOnClickListener { finish() }
+        }
+    }
+
+    /** Formats an amount as R150 or R150.50. */
+    protected fun money(amount: Double): String {
+        return if (amount % 1.0 == 0.0) {
+            "R${amount.toInt()}"
+        } else {
+            "R${String.format(Locale.US, "%.2f", amount)}"
+        }
+    }
+
+    /** Small coloured pill showing a booking status. */
+    protected fun statusBadge(status: String): TextView {
+        val color = when (status.lowercase()) {
+            "completed" -> success
+            "cancelled" -> danger
+            "pending" -> warning
+            else -> accent
+        }
+        return TextView(this).apply {
+            text = status
+            textSize = 12f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(color)
+            setPadding(dp(12), dp(4), dp(12), dp(4))
+            background = rounded(withAlpha(color, 40), 12)
+        }
+    }
+
+    /** Pill button with a red outline, for destructive actions like cancelling. */
+    protected fun dangerButton(title: String, onClick: () -> Unit): Button {
+        return outlineButton(title).apply {
+            setTextColor(danger)
+            background = withRipple(
+                rounded(Color.TRANSPARENT, 28, danger, 2),
+                withAlpha(danger, 40),
+                28
+            )
+            setOnClickListener { onClick() }
+        }
+    }
+
+    /**
+     * Tappable chips instead of dropdowns. Read the selection with `group.index`.
+     * `columns` sets how many chips sit in each row (1 = full-width cards).
+     */
+    protected fun choiceGroup(
+        options: List<String>,
+        columns: Int = 2,
+        initialIndex: Int = 0,
+        onChange: ((Int) -> Unit)? = null
+    ): ChoiceGroup {
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { setMargins(0, dp(6), 0, dp(12)) }
+        }
+        val group = ChoiceGroup(container)
+        if (options.isEmpty()) return group
+
+        val chips = mutableListOf<TextView>()
+
+        fun refresh() {
+            chips.forEachIndexed { i, chip ->
+                val selected = i == group.index
+                chip.setTextColor(if (selected) onPrimary else textColor)
+                chip.typeface = if (selected) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+                chip.background = if (selected) {
+                    rounded(primary, 16)
+                } else {
+                    rounded(surface, 16, border, 1)
+                }
+            }
+        }
+
+        options.chunked(columns).forEachIndexed { rowIndex, rowOptions ->
+            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+
+            rowOptions.forEachIndexed { colIndex, label ->
+                val index = rowIndex * columns + colIndex
+                val chip = TextView(this).apply {
+                    text = label
+                    textSize = 15f
+                    gravity = Gravity.CENTER
+                    setPadding(dp(12), dp(14), dp(12), dp(14))
+                    isClickable = true
+                    isFocusable = true
+                    setOnClickListener {
+                        group.index = index
+                        refresh()
+                        onChange?.invoke(index)
+                    }
+                }
+                chips.add(chip)
+                row.addView(
+                    chip,
+                    LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                        .apply { setMargins(dp(4), dp(4), dp(4), dp(4)) }
+                )
+            }
+
+            // Keep chip widths equal when the last row is not full.
+            repeat(columns - rowOptions.size) {
+                row.addView(
+                    View(this),
+                    LinearLayout.LayoutParams(0, 0, 1f)
+                        .apply { setMargins(dp(4), 0, dp(4), 0) }
+                )
+            }
+
+            container.addView(row)
+        }
+
+        group.index = initialIndex.coerceIn(0, options.lastIndex)
+        refresh()
+        return group
+    }
+
 
     protected fun addSpacing(parent: LinearLayout, height: Int = 12) {
         parent.addView(

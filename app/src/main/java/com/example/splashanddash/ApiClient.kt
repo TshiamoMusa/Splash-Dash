@@ -263,6 +263,22 @@ object ApiClient {
         return Result.success(json)
     }
 
+    /** Reads a date returned by the API, e.g. 2026-11-20T08:00:00+00:00 or ...Z. */
+    fun parseApiDate(text: String): Date? {
+        val cleaned = text.trim().replace(Regex("\\.\\d+"), "")
+        return try {
+            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US).parse(cleaned)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /** Friendly local date/time for showing in the app, e.g. Fri, 20 Nov 2026 · 10:00. */
+    fun displayDate(text: String): String {
+        val date = parseApiDate(text) ?: return text
+        return SimpleDateFormat("EEE, d MMM yyyy · HH:mm", Locale.getDefault()).format(date)
+    }
+
     /** Formats a date the way the API expects, e.g. 2026-11-20T10:00:00+02:00. */
     fun formatForApi(date: Date): String {
         return SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US).format(date)

@@ -19,11 +19,16 @@ object GoogleSignInManager {
         onResult: (Boolean, String) -> Unit
     ) {
         try {
+            val serverClientId = try {
+                activity.getString(R.string.default_web_client_id)
+            } catch (e: Exception) {
+                onResult(false, "Google Sign-In is not configured. Please use email and password login.")
+                return
+            }
+
             val googleOption = GetGoogleIdOption.Builder()
                 .setFilterByAuthorizedAccounts(false)
-                .setServerClientId(
-                    activity.getString(R.string.default_web_client_id)
-                )
+                .setServerClientId(serverClientId)
                 .setAutoSelectEnabled(false)
                 .build()
 
@@ -78,7 +83,7 @@ object GoogleSignInManager {
                 }
 
         } catch (exception: Exception) {
-            Log.e(TAG, "Google credential selection failed", exception)
+            Log.e(TAG, "Google credential sign-in failed", exception)
             onResult(false, exception.localizedMessage ?: "Google Sign-In was cancelled or failed.")
         }
     }

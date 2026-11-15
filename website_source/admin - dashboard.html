@@ -16,7 +16,6 @@
 </head>
 <body>
 
-    <!-- Only authenticated administrators can access this dashboard. -->
     <header class="admin-header">
         <div class="header-content">
             <div>
@@ -27,7 +26,7 @@
 
             <div class="admin-profile">
                 <span>Welcome, <span id="adminName"></span></span>
-                <a href="change_password.html">Change Password</a>
+                <a href="edit-profile.html">Edit Profile</a>
                 <a href="index.html">Logout</a>
             </div>
         </div>
@@ -42,7 +41,6 @@
 
     <main class="admin-container">
 
-        <!-- Statistics are calculated using booking records from the API. -->
         <section class="dashboard-section">
             <div class="section-heading">
                 <h2>Business Overview</h2>
@@ -79,7 +77,6 @@
             </div>
         </section>
 
-        <!-- Displays the five most recently scheduled bookings. -->
         <section class="dashboard-section">
             <div class="section-heading">
                 <h2>Recent Bookings</h2>
@@ -116,7 +113,6 @@
         <p>&copy; 2026 Splash &amp; Dash Car Wash Management System</p>
     </footer>
 
-    <!-- Loads dashboard data from the Splash & Dash API. -->
     <script src="js/admin-dashboard.js"></script>
 
 </body>

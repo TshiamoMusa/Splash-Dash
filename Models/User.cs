@@ -1,3 +1,4 @@
+
 namespace SplashDash.Api.Models;
 
 public class User
@@ -14,11 +15,15 @@ public class User
 
     public string PhoneNumber { get; set; } = string.Empty;
 
+    public string Gender { get; set; } = "Undefined";
+
     public string? PasswordHash { get; set; }
 
     public string? FirebaseUid { get; set; }
 
     public string AccountType { get; set; } = "Customer";
+
+    public bool IsSuperAdmin { get; set; } = false;
 
     public bool IsActive { get; set; } = true;
 

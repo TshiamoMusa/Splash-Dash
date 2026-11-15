@@ -5,9 +5,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow">
+
     <title>Reports - Splash &amp; Dash Admin Portal</title>
+
     <link rel="stylesheet" href="css/base.css">
     <link rel="stylesheet" href="css/admin.css">
+
     <script src="js/portal-auth.js"></script>
     <script>Portal.requireRole("Admin");</script>
 </head>
@@ -23,7 +26,7 @@
 
             <div class="admin-profile">
                 <span>Welcome, <span id="adminName"></span></span>
-                <a href="change_password.html">Change Password</a>
+                <a href="edit-profile.html">Edit Profile</a>
                 <a href="index.html">Logout</a>
             </div>
         </div>
@@ -40,7 +43,6 @@
 
         <p id="report-message" role="status" aria-live="polite"></p>
 
-        <!-- Report Filters -->
         <section class="dashboard-section">
 
             <div class="section-heading">
@@ -80,7 +82,6 @@
 
         </section>
 
-        <!-- Report Summary -->
         <section class="dashboard-section">
 
             <div class="section-heading">
@@ -109,7 +110,6 @@
 
         </section>
 
-        <!-- Service Popularity Report -->
         <section class="dashboard-section report-section">
 
             <div class="section-heading">
@@ -141,7 +141,6 @@
 
         </section>
 
-        <!-- Revenue Report -->
         <section class="dashboard-section report-section">
 
             <div class="section-heading">
@@ -181,7 +180,6 @@
 
         </section>
 
-        <!-- Booking Status Report -->
         <section class="dashboard-section report-section">
 
             <div class="section-heading">
@@ -221,5 +219,6 @@
 
     <script src="js/portal-pages.js"></script>
     <script src="js/admin-reports.js"></script>
+
 </body>
 </html>

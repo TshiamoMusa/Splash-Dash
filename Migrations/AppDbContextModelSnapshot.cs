@@ -282,9 +282,23 @@ namespace SplashDash.Api.Migrations
                         .HasColumnType("character varying(50)")
                         .HasColumnName("first_name");
 
+                    b.Property<string>("Gender")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasDefaultValue("Undefined")
+                        .HasColumnName("gender");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean")
                         .HasColumnName("is_active");
+
+                    b.Property<bool>("IsSuperAdmin")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_super_admin");
 
                     b.Property<string>("PasswordHash")
                         .HasColumnType("text")

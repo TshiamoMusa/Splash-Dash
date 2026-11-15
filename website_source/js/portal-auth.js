@@ -2,29 +2,46 @@
  * Splash & Dash - shared helpers for the staff and admin website.
  * Loaded on every portal page. Exposes one global: Portal.
  *
- * Note: the role check here only controls what the browser SHOWS.
- * The real protection is [Authorize(Roles = ...)] on the API controllers.
+ * The browser role check controls what is displayed.
+ * Real security is enforced by [Authorize(Roles = ...)] on the API.
  */
 (function () {
     "use strict";
 
-    var API_BASE = "http://localhost:5160/api";
+    // Public address of the deployed API.
+    var API_BASE = "https://splash-dash-api.onrender.com/api";
+
+    // Free-tier hosts put idle servers to sleep; the first request can take
+    // 30-60 seconds while the server starts. Allow for that before giving up.
+    var REQUEST_TIMEOUT_MS = 60000;
+
     var TOKEN_KEY = "sd_token";
     var ACCOUNT_KEY = "sd_account";
 
+    // ------------------------------------------------------------
+    // Session storage helpers
+    // ------------------------------------------------------------
     function getToken() {
-        try { return sessionStorage.getItem(TOKEN_KEY); } catch (e) { return null; }
+        try {
+            return sessionStorage.getItem(TOKEN_KEY);
+        } catch (e) {
+            return null;
+        }
     }
 
     function getAccount() {
-        try { return JSON.parse(sessionStorage.getItem(ACCOUNT_KEY)); } catch (e) { return null; }
+        try {
+            return JSON.parse(sessionStorage.getItem(ACCOUNT_KEY));
+        } catch (e) {
+            return null;
+        }
     }
 
     function save(data) {
         try {
             sessionStorage.setItem(TOKEN_KEY, data.token);
             sessionStorage.setItem(ACCOUNT_KEY, JSON.stringify(data.account));
-        } catch (e) { /* storage blocked: the user will be asked to log in again */ }
+        } catch (e) { }
     }
 
     function clear() {
@@ -34,18 +51,45 @@
         } catch (e) { }
     }
 
+    // Merges updated details (e.g. after saving on the Edit Profile page)
+    // into the stored account, so the welcome name stays current without
+    // logging in again.
+    function updateAccount(changes) {
+        try {
+            var account = getAccount() || {};
+
+            sessionStorage.setItem(
+                ACCOUNT_KEY,
+                JSON.stringify(Object.assign(account, changes))
+            );
+        } catch (e) { }
+    }
+
+    // Reads the expiry time inside the JWT (no signature check - the API
+    // does that). Anything unreadable is treated as expired.
     function isExpired(token) {
         try {
-            var part = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+            var part = token.split(".")[1]
+                .replace(/-/g, "+")
+                .replace(/_/g, "/");
+
             var payload = JSON.parse(atob(part));
+
             return payload.exp * 1000 < Date.now();
         } catch (e) {
             return true;
         }
     }
 
+    // ------------------------------------------------------------
+    // Navigation
+    // Super Admins are returned by the API with role "Admin"
+    // (isSuperAdmin = true), so they share the admin dashboard.
+    // ------------------------------------------------------------
     function homeFor(role) {
-        return role === "Admin" ? "admin - dashboard.html" : "staff - dashboard.html";
+        return role === "Admin"
+            ? "admin - dashboard.html"
+            : "staff - dashboard.html";
     }
 
     function logout() {
@@ -53,8 +97,10 @@
         window.location.href = "index.html";
     }
 
-    // Sends the visitor to login.html unless a valid session exists.
-    // Pass "Admin" or "Staff" to restrict the page, or nothing to allow both.
+    // Call at the top of every protected page.
+    //   Portal.requireRole("Staff") - Staff only
+    //   Portal.requireRole("Admin") - Admin / Super Admin only
+    //   Portal.requireRole()        - any signed-in staff or admin
     function requireRole(role) {
         var token = getToken();
         var account = getAccount();
@@ -73,29 +119,74 @@
         return true;
     }
 
-    // Calls the API. Resolves with the parsed JSON, rejects with an Error whose
-    // message is safe to show to the user.
+    // ------------------------------------------------------------
+    // API requests
+    // Adds the JWT, applies a timeout and turns every failure into a
+    // readable Error message that pages can show to the user.
+    // ------------------------------------------------------------
     async function request(path, options) {
         options = options || {};
-        var headers = Object.assign({ "Content-Type": "application/json" }, options.headers || {});
+
+        var headers = Object.assign(
+            { "Content-Type": "application/json" },
+            options.headers || {}
+        );
+
         var token = getToken();
-        if (token) headers.Authorization = "Bearer " + token;
+
+        if (token) {
+            headers.Authorization = "Bearer " + token;
+        }
+
+        var controller = new AbortController();
+        var timer = setTimeout(function () {
+            controller.abort();
+        }, REQUEST_TIMEOUT_MS);
 
         var res;
+
         try {
-            res = await fetch(API_BASE + path, Object.assign({}, options, { headers: headers }));
+            res = await fetch(API_BASE + path, Object.assign({}, options, {
+                headers: headers,
+                signal: controller.signal
+            }));
         } catch (e) {
-            throw new Error("Cannot reach the server. Check that the API is running.");
+            if (e && e.name === "AbortError") {
+                throw new Error(
+                    "The server is taking too long to respond. It may be starting up - please try again in a minute."
+                );
+            }
+
+            throw new Error(
+                "Cannot reach the server. Check your internet connection or try again shortly."
+            );
+        } finally {
+            clearTimeout(timer);
+        }
+
+        // Gateway errors mean the host is up but the API is still starting.
+        if (res.status === 502 || res.status === 503 || res.status === 504) {
+            throw new Error(
+                "The server is starting up. Please wait a moment and try again."
+            );
         }
 
         var data = null;
-        try { data = await res.json(); } catch (e) { }
 
+        try {
+            data = await res.json();
+        } catch (e) { }
+
+        // An expired or invalid session sends the user back to login.
+        // (A failed login has no token yet, so it falls through to the
+        // normal "Invalid username/email or password." message.)
         if (res.status === 401 && token) {
-            // Session expired or token rejected.
             clear();
             window.location.replace("login.html");
-            throw new Error("Your session has expired. Please log in again.");
+
+            throw new Error(
+                "Your session has expired. Please log in again."
+            );
         }
 
         if (res.status === 403) {
@@ -103,7 +194,10 @@
         }
 
         if (!res.ok) {
-            throw new Error((data && data.message) || "Request failed (" + res.status + ").");
+            throw new Error(
+                (data && data.message) ||
+                "Request failed (" + res.status + ")."
+            );
         }
 
         return data;
@@ -114,41 +208,65 @@
     }
 
     function post(path, body) {
-        return request(path, { method: "POST", body: JSON.stringify(body || {}) });
+        return request(path, {
+            method: "POST",
+            body: JSON.stringify(body || {})
+        });
     }
 
     function put(path, body) {
-        return request(path, { method: "PUT", body: JSON.stringify(body || {}) });
+        return request(path, {
+            method: "PUT",
+            body: JSON.stringify(body || {})
+        });
     }
 
-    // Logs in a staff or admin account. Customers are refused: they use the app.
+    // ------------------------------------------------------------
+    // Login
+    // "identifier" is a username or an email address.
+    // Customers use the mobile app, so they are refused here.
+    // ------------------------------------------------------------
     async function login(identifier, password) {
         var data = await request("/auth/login", {
             method: "POST",
-            body: JSON.stringify({ identifier: identifier, password: password })
+            body: JSON.stringify({
+                identifier: identifier,
+                password: password
+            })
         });
 
         var role = data.account.role;
+
         if (role !== "Admin" && role !== "Staff") {
-            throw new Error("Customers use the Splash & Dash mobile app.");
+            throw new Error(
+                "Customers use the Splash & Dash mobile app."
+            );
         }
 
         save(data);
+
         return data.account;
     }
 
-    // Fills in the welcome name and makes every "Logout" link end the session.
+    // ------------------------------------------------------------
+    // Shared page behaviour: welcome name and Logout links
+    // ------------------------------------------------------------
     document.addEventListener("DOMContentLoaded", function () {
         var account = getAccount();
 
         if (account) {
             ["adminName", "staffName"].forEach(function (id) {
                 var el = document.getElementById(id);
-                if (el) el.textContent = account.fullName || account.firstName;
+
+                if (el) {
+                    el.textContent =
+                        account.fullName || account.firstName || "";
+                }
             });
         }
 
         var links = document.querySelectorAll("a");
+
         links.forEach(function (link) {
             if (link.textContent.trim() === "Logout") {
                 link.addEventListener("click", function (event) {
@@ -162,6 +280,7 @@
     window.Portal = {
         API_BASE: API_BASE,
         getAccount: getAccount,
+        updateAccount: updateAccount,
         homeFor: homeFor,
         requireRole: requireRole,
         request: request,
@@ -171,4 +290,5 @@
         login: login,
         logout: logout
     };
+
 })();

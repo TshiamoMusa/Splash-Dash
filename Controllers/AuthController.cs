@@ -1,10 +1,12 @@
-﻿using Microsoft.AspNetCore.Authorization;
+﻿
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using SplashDash.Api.Data;
 using SplashDash.Api.Models;
+using System.ComponentModel.DataAnnotations;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
@@ -75,7 +77,6 @@ public class AuthController : ControllerBase
             });
         }
 
-        // Confirm that the account has the correct profile.
         bool profileExists = account.AccountType switch
         {
             "Admin" => await _context.Admins.AnyAsync(
@@ -107,12 +108,6 @@ public class AuthController : ControllerBase
     public async Task<IActionResult> BootstrapAdmin(
         BootstrapAdminRequest request)
     {
-        // Temporarily allowed in production to seed the first admin account
-        // if (!_environment.IsDevelopment())
-        // {
-        //     return NotFound();
-        // }
-
         string? configuredKey = _configuration["Bootstrap:AdminKey"];
         string? suppliedKey = Request.Headers["X-Bootstrap-Key"].FirstOrDefault();
 
@@ -195,7 +190,9 @@ public class AuthController : ControllerBase
             Email = email,
             PhoneNumber = request.PhoneNumber.Trim(),
             Username = username,
+            Gender = "Undefined",
             AccountType = "Admin",
+            IsSuperAdmin = true,
             IsActive = true,
             CreatedAt = DateTimeOffset.UtcNow
         };
@@ -215,7 +212,7 @@ public class AuthController : ControllerBase
 
         return Ok(new
         {
-            message = "Initial Admin account created successfully.",
+            message = "Initial Super Admin account created successfully.",
             account = new
             {
                 id = adminUser.UserId,
@@ -223,7 +220,201 @@ public class AuthController : ControllerBase
                 adminUser.Surname,
                 adminUser.Email,
                 adminUser.Username,
-                role = adminUser.AccountType
+                role = adminUser.AccountType,
+                isSuperAdmin = adminUser.IsSuperAdmin,
+                displayRole = "Super Admin"
+            }
+        });
+    }
+
+    // Retrieves the logged-in Staff or Admin profile.
+    [Authorize(Roles = "Staff,Admin")]
+    [HttpGet("profile")]
+    public async Task<IActionResult> GetProfile()
+    {
+        var account = await GetCurrentPortalAccountAsync();
+
+        if (account == null)
+        {
+            return Unauthorized(new
+            {
+                message = "Your account could not be verified."
+            });
+        }
+
+        if (account.AccountType == "Staff")
+        {
+            bool staffProfileExists = await _context.Staff
+                .AnyAsync(s => s.UserId == account.UserId);
+
+            if (!staffProfileExists)
+            {
+                return Unauthorized(new
+                {
+                    message = "Your Staff profile could not be verified."
+                });
+            }
+        }
+
+        return Ok(new
+        {
+            account = new
+            {
+                id = account.UserId,
+                firstName = account.FirstName,
+                surname = account.Surname,
+                fullName = $"{account.FirstName} {account.Surname}",
+                email = account.Email,
+                phoneNumber = account.PhoneNumber,
+                username = account.Username,
+                role = account.AccountType,
+                isSuperAdmin = account.IsSuperAdmin,
+                displayRole = account.IsSuperAdmin
+                    ? "Super Admin"
+                    : account.AccountType,
+                gender = string.IsNullOrWhiteSpace(account.Gender)
+                    ? "Undefined"
+                    : account.Gender
+            }
+        });
+    }
+
+    // Updates the logged-in Staff or Admin profile.
+    [Authorize(Roles = "Staff,Admin")]
+    [HttpPut("profile")]
+    public async Task<IActionResult> UpdateProfile(
+        UpdateProfileRequest request)
+    {
+        var account = await GetCurrentPortalAccountAsync();
+
+        if (account == null)
+        {
+            return Unauthorized(new
+            {
+                message = "Your account could not be verified."
+            });
+        }
+
+        if (string.IsNullOrWhiteSpace(request.FirstName) ||
+            string.IsNullOrWhiteSpace(request.Surname) ||
+            string.IsNullOrWhiteSpace(request.Email) ||
+            string.IsNullOrWhiteSpace(request.PhoneNumber) ||
+            string.IsNullOrWhiteSpace(request.Username))
+        {
+            return BadRequest(new
+            {
+                message = "All profile fields are required."
+            });
+        }
+
+        string firstName = request.FirstName.Trim();
+        string surname = request.Surname.Trim();
+        string email = request.Email.Trim().ToLowerInvariant();
+        string phoneNumber = request.PhoneNumber.Trim();
+        string username = request.Username.Trim();
+
+        if (!new EmailAddressAttribute().IsValid(email))
+        {
+            return BadRequest(new
+            {
+                message = "Please enter a valid email address."
+            });
+        }
+
+        bool emailExists = await _context.Users.AnyAsync(u =>
+            u.UserId != account.UserId &&
+            u.Email.ToLower() == email);
+
+        if (emailExists)
+        {
+            return Conflict(new
+            {
+                message = "An account with this email address already exists."
+            });
+        }
+
+        bool usernameExists = await _context.Users.AnyAsync(u =>
+            u.UserId != account.UserId &&
+            u.Username != null &&
+            u.Username.ToLower() == username.ToLower());
+
+        if (usernameExists)
+        {
+            return Conflict(new
+            {
+                message = "This username is already in use."
+            });
+        }
+
+        string selectedGender = request.Gender?.Trim() ?? "";
+
+        if (selectedGender.Equals("Male", StringComparison.OrdinalIgnoreCase))
+        {
+            selectedGender = "Male";
+        }
+        else if (selectedGender.Equals("Female", StringComparison.OrdinalIgnoreCase))
+        {
+            selectedGender = "Female";
+        }
+        else if (string.IsNullOrWhiteSpace(selectedGender) ||
+                 selectedGender.Equals("Undefined", StringComparison.OrdinalIgnoreCase))
+        {
+            selectedGender = "Undefined";
+        }
+        else
+        {
+            return BadRequest(new
+            {
+                message = "Gender must be Male, Female or Undefined."
+            });
+        }
+
+        Staff? staffProfile = null;
+
+        if (account.AccountType == "Staff")
+        {
+            staffProfile = await _context.Staff
+                .FirstOrDefaultAsync(s => s.UserId == account.UserId);
+
+            if (staffProfile == null)
+            {
+                return Unauthorized(new
+                {
+                    message = "Your Staff profile could not be verified."
+                });
+            }
+
+            // Keep the existing Staff gender column synchronised.
+            staffProfile.Gender = selectedGender;
+        }
+
+        account.FirstName = firstName;
+        account.Surname = surname;
+        account.Email = email;
+        account.PhoneNumber = phoneNumber;
+        account.Username = username;
+        account.Gender = selectedGender;
+
+        await _context.SaveChangesAsync();
+
+        return Ok(new
+        {
+            message = "Profile updated successfully.",
+            account = new
+            {
+                id = account.UserId,
+                firstName = account.FirstName,
+                surname = account.Surname,
+                fullName = $"{account.FirstName} {account.Surname}",
+                email = account.Email,
+                phoneNumber = account.PhoneNumber,
+                username = account.Username,
+                role = account.AccountType,
+                isSuperAdmin = account.IsSuperAdmin,
+                displayRole = account.IsSuperAdmin
+                    ? "Super Admin"
+                    : account.AccountType,
+                gender = account.Gender
             }
         });
     }
@@ -259,21 +450,14 @@ public class AuthController : ControllerBase
             });
         }
 
-        string? idValue = User.FindFirstValue(
-            ClaimTypes.NameIdentifier);
+        var account = await GetCurrentPortalAccountAsync();
 
-        if (!int.TryParse(idValue, out int userId))
+        if (account == null)
         {
-            return Unauthorized();
-        }
-
-        var account = await _context.Users.FirstOrDefaultAsync(
-            u => u.UserId == userId);
-
-        if (account == null || !account.IsActive ||
-            account.AccountType != User.FindFirstValue(ClaimTypes.Role))
-        {
-            return Unauthorized();
+            return Unauthorized(new
+            {
+                message = "Your account could not be verified."
+            });
         }
 
         var verification = _passwordHasher.VerifyHashedPassword(
@@ -301,6 +485,33 @@ public class AuthController : ControllerBase
         });
     }
 
+    // Finds the account belonging to the authenticated portal user.
+    private async Task<User?> GetCurrentPortalAccountAsync()
+    {
+        string? idValue = User.FindFirstValue(
+            ClaimTypes.NameIdentifier);
+
+        string? role = User.FindFirstValue(ClaimTypes.Role);
+
+        if (!int.TryParse(idValue, out int userId) ||
+            (role != "Staff" && role != "Admin"))
+        {
+            return null;
+        }
+
+        var account = await _context.Users.FirstOrDefaultAsync(
+            u => u.UserId == userId);
+
+        if (account == null ||
+            !account.IsActive ||
+            account.AccountType != role)
+        {
+            return null;
+        }
+
+        return account;
+    }
+
     private object CreateLoginResponse(User account)
     {
         string key = _configuration["Jwt:Key"]
@@ -324,7 +535,9 @@ public class AuthController : ControllerBase
             new(ClaimTypes.Name,
                 $"{account.FirstName} {account.Surname}"),
             new(ClaimTypes.Email, account.Email),
-            new(ClaimTypes.Role, account.AccountType)
+            new(ClaimTypes.Role, account.AccountType),
+            new("is_super_admin",
+                account.IsSuperAdmin ? "true" : "false")
         };
 
         var signingKey = new SymmetricSecurityKey(
@@ -355,7 +568,11 @@ public class AuthController : ControllerBase
                 surname = account.Surname,
                 fullName = $"{account.FirstName} {account.Surname}",
                 email = account.Email,
-                role = account.AccountType
+                role = account.AccountType,
+                isSuperAdmin = account.IsSuperAdmin,
+                displayRole = account.IsSuperAdmin
+                    ? "Super Admin"
+                    : account.AccountType
             }
         };
     }
@@ -367,19 +584,28 @@ public class AuthController : ControllerBase
     {
         if (string.IsNullOrWhiteSpace(request.Email))
         {
-            return BadRequest(new { message = "Email is required for Google login." });
+            return BadRequest(new
+            {
+                message = "Email is required for Google login."
+            });
         }
 
         string email = request.Email.Trim().ToLowerInvariant();
 
-        var account = await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == email);
+        var account = await _context.Users.FirstOrDefaultAsync(
+            u => u.Email.ToLower() == email);
 
         if (account == null)
         {
-            string fullName = string.IsNullOrWhiteSpace(request.Name) ? "Customer User" : request.Name.Trim();
+            string fullName = string.IsNullOrWhiteSpace(request.Name)
+                ? "Customer User"
+                : request.Name.Trim();
+
             string firstName = fullName;
             string surname = "Customer";
+
             int lastSpace = fullName.LastIndexOf(' ');
+
             if (lastSpace > 0)
             {
                 firstName = fullName.Substring(0, lastSpace);
@@ -392,6 +618,7 @@ public class AuthController : ControllerBase
                 Surname = surname,
                 Email = email,
                 PhoneNumber = request.PhoneNumber ?? string.Empty,
+                Gender = "Undefined",
                 FirebaseUid = request.FirebaseUid,
                 AccountType = "Customer",
                 IsActive = true,
@@ -406,6 +633,7 @@ public class AuthController : ControllerBase
 
             _context.Users.Add(account);
             _context.Customers.Add(customer);
+
             await _context.SaveChangesAsync();
         }
         else
@@ -440,6 +668,16 @@ public class ChangePasswordRequest
 {
     public string CurrentPassword { get; set; } = string.Empty;
     public string NewPassword { get; set; } = string.Empty;
+}
+
+public class UpdateProfileRequest
+{
+    public string FirstName { get; set; } = string.Empty;
+    public string Surname { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public string PhoneNumber { get; set; } = string.Empty;
+    public string Username { get; set; } = string.Empty;
+    public string? Gender { get; set; }
 }
 
 public class BootstrapAdminRequest

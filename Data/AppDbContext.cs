@@ -1,4 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿
+using Microsoft.EntityFrameworkCore;
 using SplashDash.Api.Models;
 
 namespace SplashDash.Api.Data;
@@ -34,10 +35,17 @@ public class AppDbContext : DbContext
             entity.Property(e => e.Username).HasColumnName("username").HasMaxLength(50);
             entity.Property(e => e.Email).HasColumnName("email").HasMaxLength(150);
             entity.Property(e => e.PhoneNumber).HasColumnName("phone_number").HasMaxLength(20);
+            entity.Property(e => e.Gender)
+                .HasColumnName("gender")
+                .HasMaxLength(10)
+                .HasDefaultValue("Undefined");
             entity.Property(e => e.PasswordHash).HasColumnName("password_hash").HasColumnType("text");
             entity.Property(e => e.FirebaseUid).HasColumnName("firebase_uid").HasMaxLength(150);
             entity.Property(e => e.AccountType).HasColumnName("account_type").HasMaxLength(20);
             entity.Property(e => e.IsActive).HasColumnName("is_active");
+            entity.Property(e => e.IsSuperAdmin)
+                .HasColumnName("is_super_admin")
+                .HasDefaultValue(false);
             entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp with time zone");
         });
 

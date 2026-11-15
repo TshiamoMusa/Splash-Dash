@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Edit Profile - Splash &amp; Dash</title>
+
+    <link rel="stylesheet" href="css/base.css">
+
+    <script src="js/portal-auth.js"></script>
+    <!-- Any signed-in staff member or admin may use this page. -->
+    <script>Portal.requireRole();</script>
+</head>
+
+<body class="auth-page">
+
+    <!--
+        EDIT PROFILE (staff and admin).
+        Connected to the API:
+          GET  /api/auth/profile          - loads the signed-in account
+          PUT  /api/auth/profile          - saves personal details
+          POST /api/auth/change-password  - body: { currentPassword, newPassword }
+        Changing the password is optional; staff are not forced to do it at first login.
+    -->
+
+    <main class="auth-container">
+
+        <div class="auth-card">
+
+            <h1>Edit Profile</h1>
+
+            <p>Manage your personal information and account security.</p>
+
+            <div class="error-message" id="profile-error" role="alert" hidden></div>
+            <div class="success-message" id="profile-success" role="status" hidden></div>
+
+            <section>
+
+                <h2>Personal Information</h2>
+
+                <p>Click Edit Profile to update your personal details.</p>
+
+                <p class="form-hint" id="editing-message" role="status" hidden>
+                    Editing mode is enabled. You can now update your personal information.
+                </p>
+
+                <form id="profile-form" novalidate>
+
+                    <div class="form-group">
+                        <label for="first-name">First Name</label>
+                        <input type="text" id="first-name" name="firstName"
+                               autocomplete="given-name" disabled required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="surname">Surname</label>
+                        <input type="text" id="surname" name="surname"
+                               autocomplete="family-name" disabled required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="email">Email Address</label>
+                        <input type="email" id="email" name="email"
+                               autocomplete="email" disabled required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="phone-number">Phone Number</label>
+                        <input type="tel" id="phone-number" name="phoneNumber"
+                               autocomplete="tel" disabled required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="username">Username</label>
+                        <input type="text" id="username" name="username"
+                               autocomplete="username" disabled required>
+                    </div>
+
+                    <!-- Shown for Staff accounts only. -->
+                    <div class="form-group" id="gender-group" hidden>
+                        <label for="gender">Gender</label>
+                        <select id="gender" name="gender" disabled>
+                            <option value="Male">Male</option>
+                            <option value="Female">Female</option>
+                            <option value="Undefined">Undefined</option>
+                        </select>
+                    </div>
+
+                    <button type="button" id="edit-profile-button">
+                        Edit Profile
+                    </button>
+
+                    <button type="submit" id="profile-button" hidden>
+                        Save Changes
+                    </button>
+
+                    <button type="button" id="cancel-profile-button"
+                            class="btn-light" hidden>
+                        Cancel
+                    </button>
+
+                </form>
+
+            </section>
+
+            <hr>
+
+            <section>
+
+                <h2>Change Password</h2>
+
+                <p>Choose a new password that only you know.</p>
+
+                <form id="password-form" novalidate>
+
+                    <div class="form-group">
+                        <label for="current-password">Current Password</label>
+                        <input type="password" id="current-password"
+                               name="currentPassword"
+                               autocomplete="current-password" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="new-password">New Password</label>
+                        <input type="password" id="new-password"
+                               name="newPassword" minlength="8"
+                               autocomplete="new-password" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="confirm-password">Confirm New Password</label>
+                        <input type="password" id="confirm-password"
+                               name="confirmPassword" minlength="8"
+                               autocomplete="new-password" required>
+                    </div>
+
+                    <button type="submit" id="password-button">
+                        Change Password
+                    </button>
+
+                </form>
+
+            </section>
+
+            <!-- Target is set by the script below to match the signed-in role. -->
+            <a class="back-link" id="back-link" href="login.html">
+                &larr; Back to dashboard
+            </a>
+
+        </div>
+
+    </main>
+
+    <script>
+        (function () {
+            "use strict";
+
+            const profileForm = document.getElementById("profile-form");
+            const passwordForm = document.getElementById("password-form");
+
+            const profileError = document.getElementById("profile-error");
+            const profileSuccess = document.getElementById("profile-success");
+            const editingMessage = document.getElementById("editing-message");
+
+            const editProfileButton = document.getElementById("edit-profile-button");
+            const profileButton = document.getElementById("profile-button");
+            const cancelProfileButton = document.getElementById("cancel-profile-button");
+            const passwordButton = document.getElementById("password-button");
+
+            const profileInputs = profileForm.querySelectorAll("input");
+
+            const genderInput = document.getElementById("gender");
+            const genderGroup = document.getElementById("gender-group");
+
+            let isStaffAccount = false;
+            let originalProfile = null;
+
+            // "Back" always returns to the dashboard that matches the signed-in role.
+            const signedInAccount = Portal.getAccount();
+
+            if (signedInAccount) {
+                document.getElementById("back-link").href =
+                    Portal.homeFor(signedInAccount.role);
+            }
+
+            // Shows one message at a time (error or success).
+            function showMessage(errorBox, successBox, text, type) {
+                errorBox.hidden = true;
+                successBox.hidden = true;
+
+                if (type === "error") {
+                    errorBox.textContent = text;
+                    errorBox.hidden = false;
+                } else {
+                    successBox.textContent = text;
+                    successBox.hidden = false;
+                }
+            }
+
+            function clearMessages() {
+                profileError.hidden = true;
+                profileSuccess.hidden = true;
+            }
+
+            function getProfileValues() {
+                return {
+                    firstName: document.getElementById("first-name").value,
+                    surname: document.getElementById("surname").value,
+                    email: document.getElementById("email").value,
+                    phoneNumber: document.getElementById("phone-number").value,
+                    username: document.getElementById("username").value,
+                    gender: genderInput.value
+                };
+            }
+
+            function restoreProfileValues(profile) {
+                document.getElementById("first-name").value = profile.firstName;
+                document.getElementById("surname").value = profile.surname;
+                document.getElementById("email").value = profile.email;
+                document.getElementById("phone-number").value = profile.phoneNumber;
+                document.getElementById("username").value = profile.username;
+                genderInput.value = profile.gender || "Undefined";
+            }
+
+            // Switches the personal-information form between read-only and editable.
+            function setProfileEditing(editing) {
+                profileInputs.forEach(function (input) {
+                    input.disabled = !editing;
+                });
+
+                genderInput.disabled = !editing;
+
+                editProfileButton.hidden = editing;
+                profileButton.hidden = !editing;
+                cancelProfileButton.hidden = !editing;
+                editingMessage.hidden = !editing;
+
+                if (editing) {
+                    document.getElementById("first-name").focus();
+                }
+            }
+
+            // Loads the signed-in account from the API.
+            async function loadProfile() {
+                try {
+                    const response = await Portal.get("/auth/profile");
+                    const account = response.account || response;
+
+                    isStaffAccount = String(account.role || "")
+                        .trim()
+                        .toLowerCase() === "staff";
+
+                    document.getElementById("first-name").value =
+                        account.firstName || "";
+
+                    document.getElementById("surname").value =
+                        account.surname || "";
+
+                    document.getElementById("email").value =
+                        account.email || "";
+
+                    document.getElementById("phone-number").value =
+                        account.phoneNumber || "";
+
+                    document.getElementById("username").value =
+                        account.username || "";
+
+                    // Only staff see the gender field. Admins keep their stored
+                    // value (loaded below, sent unchanged when they save).
+                    genderGroup.hidden = !isStaffAccount;
+                    genderInput.value = account.gender || "Undefined";
+
+                    originalProfile = getProfileValues();
+
+                    setProfileEditing(false);
+
+                } catch (error) {
+                    showMessage(
+                        profileError,
+                        profileSuccess,
+                        error.message || "Unable to load your profile.",
+                        "error"
+                    );
+                }
+            }
+
+            editProfileButton.addEventListener("click", function () {
+                clearMessages();
+
+                if (!originalProfile) {
+                    showMessage(
+                        profileError,
+                        profileSuccess,
+                        "Your profile has not loaded yet. Please try again.",
+                        "error"
+                    );
+                    return;
+                }
+
+                setProfileEditing(true);
+            });
+
+            cancelProfileButton.addEventListener("click", function () {
+                if (originalProfile) {
+                    restoreProfileValues(originalProfile);
+                }
+
+                clearMessages();
+                setProfileEditing(false);
+            });
+
+            // Save personal information.
+            profileForm.addEventListener("submit", async function (event) {
+                event.preventDefault();
+                clearMessages();
+
+                const profile = getProfileValues();
+
+                profile.firstName = profile.firstName.trim();
+                profile.surname = profile.surname.trim();
+                profile.email = profile.email.trim();
+                profile.phoneNumber = profile.phoneNumber.trim();
+                profile.username = profile.username.trim();
+
+                if (
+                    !profile.firstName ||
+                    !profile.surname ||
+                    !profile.email ||
+                    !profile.phoneNumber ||
+                    !profile.username
+                ) {
+                    showMessage(
+                        profileError,
+                        profileSuccess,
+                        "Please complete all personal information fields.",
+                        "error"
+                    );
+                    return;
+                }
+
+                profileButton.disabled = true;
+                profileButton.textContent = "Saving...";
+
+                try {
+                    const result = await Portal.put("/auth/profile", profile);
+                    const saved = result.account || {};
+
+                    if (isStaffAccount) {
+                        genderInput.value =
+                            saved.gender || profile.gender || "Undefined";
+                    }
+
+                    originalProfile = getProfileValues();
+
+                    // Keep the "Welcome, ..." name on other pages up to date.
+                    Portal.updateAccount({
+                        firstName: saved.firstName || profile.firstName,
+                        surname: saved.surname || profile.surname,
+                        fullName: saved.fullName ||
+                            (profile.firstName + " " + profile.surname),
+                        email: saved.email || profile.email
+                    });
+
+                    setProfileEditing(false);
+
+                    showMessage(
+                        profileError,
+                        profileSuccess,
+                        result.message || "Your profile has been updated successfully.",
+                        "success"
+                    );
+
+                } catch (error) {
+                    showMessage(
+                        profileError,
+                        profileSuccess,
+                        error.message || "Unable to update your profile.",
+                        "error"
+                    );
+                } finally {
+                    profileButton.disabled = false;
+                    profileButton.textContent = "Save Changes";
+                }
+            });
+
+            // Change password.
+            passwordForm.addEventListener("submit", async function (event) {
+                event.preventDefault();
+                clearMessages();
+
+                const currentPassword =
+                    document.getElementById("current-password").value;
+
+                const newPassword =
+                    document.getElementById("new-password").value;
+
+                const confirmPassword =
+                    document.getElementById("confirm-password").value;
+
+                if (!currentPassword || !newPassword || !confirmPassword) {
+                    showMessage(
+                        profileError,
+                        profileSuccess,
+                        "Please complete all three password fields.",
+                        "error"
+                    );
+                    return;
+                }
+
+                if (newPassword.length < 8) {
+                    showMessage(
+                        profileError,
+                        profileSuccess,
+                        "Your new password must contain at least 8 characters.",
+                        "error"
+                    );
+                    return;
+                }
+
+                if (newPassword !== confirmPassword) {
+                    showMessage(
+                        profileError,
+                        profileSuccess,
+                        "The new passwords do not match.",
+                        "error"
+                    );
+                    return;
+                }
+
+                if (newPassword === currentPassword) {
+                    showMessage(
+                        profileError,
+                        profileSuccess,
+                        "Your new password must be different from your current password.",
+                        "error"
+                    );
+                    return;
+                }
+
+                passwordButton.disabled = true;
+                passwordButton.textContent = "Changing Password...";
+
+                try {
+                    const result = await Portal.post(
+                        "/auth/change-password",
+                        {
+                            currentPassword: currentPassword,
+                            newPassword: newPassword
+                        }
+                    );
+
+                    passwordForm.reset();
+
+                    showMessage(
+                        profileError,
+                        profileSuccess,
+                        result.message || "Your password has been changed successfully.",
+                        "success"
+                    );
+
+                } catch (error) {
+                    showMessage(
+                        profileError,
+                        profileSuccess,
+                        error.message || "Unable to change your password.",
+                        "error"
+                    );
+                } finally {
+                    passwordButton.disabled = false;
+                    passwordButton.textContent = "Change Password";
+                }
+            });
+
+            loadProfile();
+
+        })();
+    </script>
+
+</body>
+</html>

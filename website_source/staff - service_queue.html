@@ -1,5 +1,4 @@
-﻿
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -9,10 +8,29 @@
     <link rel="stylesheet" href="css/base.css">
     <link rel="stylesheet" href="css/staff.css">
     <script src="js/portal-auth.js"></script>
+    <!-- Staff only: anyone else is sent to the login page (or their own dashboard). -->
     <script>Portal.requireRole("Staff");</script>
     <script src="js/staff-service-queue.js" defer></script>
 </head>
 <body>
+
+    <!--
+        STAFF SERVICE QUEUE
+        One shared booking queue for all staff (no per-staff assignment).
+
+        Data and actions (see js/staff-service-queue.js):
+          GET /api/Bookings/all           - load the queue
+          PUT /api/Bookings/{id}/status   - move a booking to a new status or cancel it
+
+        Rules enforced by the API (the screen follows them):
+          - Cancelled bookings are final.
+          - Completed bookings can only be changed by an administrator.
+
+        Element ids used by the script:
+          booking-filter-form, booking-search, booking-status, booking-type,
+          booking-date, clear-booking-filters, refresh-bookings,
+          queue-message, bookingQueue (table body, 9 columns).
+    -->
 
     <header class="staff-header">
         <div class="header-content">
@@ -24,7 +42,7 @@
 
             <div class="staff-profile">
                 <span>Welcome, <span id="staffName"></span></span>
-                <a href="change_password.html">Change Password</a>
+                <a href="edit-profile.html">Edit Profile</a>
                 <a href="index.html">Logout</a>
             </div>
         </div>
@@ -81,7 +99,12 @@
 
                 <button type="button" id="clear-booking-filters">Clear Filters</button>
 
+                <button type="button" id="refresh-bookings">Refresh Bookings</button>
+
             </form>
+
+            <!-- Success and error messages from the script appear here. -->
+            <p id="queue-message" role="status"></p>
 
             <div class="table-container">
 
@@ -95,6 +118,7 @@
                             <th>Service</th>
                             <th>Booking Type</th>
                             <th>Date &amp; Time</th>
+                            <th>Payment</th>
                             <th>Status</th>
                             <th>Actions</th>
                         </tr>
@@ -102,7 +126,7 @@
 
                     <tbody id="bookingQueue">
                         <tr>
-                            <td colspan="8">Loading bookings...</td>
+                            <td colspan="9">Loading bookings...</td>
                         </tr>
                     </tbody>
 

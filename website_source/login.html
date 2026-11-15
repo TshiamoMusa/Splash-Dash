@@ -15,10 +15,11 @@
         This page is NOT linked from the public site. Staff reach it through a hidden trigger (to be decided).
 
         Connected to the API: POST /api/auth/login (see the script at the bottom of this page).
+          - Staff can sign in with their username or their email address.
           - Deactivated accounts are refused by the API.
-          - mustChangePassword = true -> change_password.html (needs the API to return this flag; not added yet)
-          - role = Admin              -> "admin - dashboard.html"
-          - role = Staff              -> "staff - dashboard.html"
+          - role = Admin (includes Super Admins) -> "admin - dashboard.html"
+          - role = Staff                         -> "staff - dashboard.html"
+          - Changing a password is optional; it is done from edit-profile.html.
     -->
 
     <main class="auth-container">
@@ -31,7 +32,7 @@
             <form id="login-form" novalidate>
 
                 <div class="form-group">
-                    <label for="username">Username</label>
+                    <label for="username">Username or Email</label>
                     <input
                         type="text"
                         id="username"
@@ -52,6 +53,11 @@
 
                 <button type="submit" id="login-button">Login</button>
 
+                <!-- Shown if the server is slow to answer (it sleeps when idle). -->
+                <p id="login-status" role="status" hidden>
+                    Still connecting - the server may be starting up. This can take up to a minute.
+                </p>
+
             </form>
 
             <a class="back-link" href="index.html">&larr; Back to website</a>
@@ -62,6 +68,7 @@
         (function () {
             var form = document.getElementById("login-form");
             var errorBox = document.getElementById("login-error");
+            var statusBox = document.getElementById("login-status");
             var button = document.getElementById("login-button");
 
             function showError(message) {
@@ -86,25 +93,28 @@
                 var password = document.getElementById("password").value;
 
                 if (!username || !password) {
-                    showError("Please enter your username and password.");
+                    showError("Please enter your username (or email) and password.");
                     return;
                 }
 
                 button.disabled = true;
                 button.textContent = "Logging in...";
 
+                // If the server is asleep, tell the user why it is taking a while.
+                var slowTimer = setTimeout(function () {
+                    statusBox.hidden = false;
+                }, 4000);
+
                 try {
                     var account = await Portal.login(username, password);
-
-                    if (account.mustChangePassword) {
-                        window.location.href = "change_password.html";
-                    } else {
-                        window.location.href = Portal.homeFor(account.role);
-                    }
+                    window.location.href = Portal.homeFor(account.role);
                 } catch (err) {
                     showError(err.message);
                     button.disabled = false;
                     button.textContent = "Login";
+                } finally {
+                    clearTimeout(slowTimer);
+                    statusBox.hidden = true;
                 }
             });
         })();

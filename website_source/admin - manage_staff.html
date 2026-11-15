@@ -5,9 +5,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow">
+
     <title>Manage Accounts - Splash &amp; Dash Admin Portal</title>
+
     <link rel="stylesheet" href="css/base.css">
     <link rel="stylesheet" href="css/admin.css">
+
     <script src="js/portal-auth.js"></script>
     <script>Portal.requireRole("Admin");</script>
 </head>
@@ -23,7 +26,7 @@
 
             <div class="admin-profile">
                 <span>Welcome, <span id="adminName"></span></span>
-                <a href="change_password.html">Change Password</a>
+                <a href="edit-profile.html">Edit Profile</a>
                 <a href="index.html">Logout</a>
             </div>
         </div>
@@ -40,7 +43,6 @@
 
         <p id="staff-message" role="status" aria-live="polite"></p>
 
-        <!-- Account Overview -->
         <section class="dashboard-section">
 
             <div class="section-heading">
@@ -69,7 +71,6 @@
 
         </section>
 
-        <!-- Add Account -->
         <section class="dashboard-section">
 
             <div class="section-heading">
@@ -140,21 +141,42 @@
                         <option value="">Select Role</option>
                         <option value="Staff">Staff</option>
                         <option value="Admin">Admin</option>
+                        <option value="SuperAdmin" id="super-admin-option" hidden disabled>
+                            Super Admin
+                        </option>
                     </select>
+
+                    <p class="form-hint" id="role-hint">
+                        Select the account type for the new employee.
+                    </p>
+                </div>
+
+                <div class="form-group" id="gender-group" hidden>
+                    <label for="staff-gender">Gender</label>
+                    <select id="staff-gender" name="gender">
+                        <option value="">Select Gender</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Undefined">Undefined</option>
+                    </select>
+                    <p class="form-hint">
+                        If no option is selected, Gender will be saved as Undefined.
+                    </p>
                 </div>
 
                 <div class="form-group">
                     <label for="temporary-password">Temporary Password</label>
                     <input
-                        type="text"
+                        type="password"
                         id="temporary-password"
                         name="password"
                         placeholder="At least 8 characters"
                         minlength="8"
-                        autocomplete="off"
+                        autocomplete="new-password"
                         required>
+
                     <p class="form-hint">
-                        Give this password to the account holder. They can change it later from Change Password.
+                        Give this password to the account holder. They can change it later from Edit Profile.
                     </p>
                 </div>
 
@@ -166,7 +188,6 @@
 
         </section>
 
-        <!-- Account Records -->
         <section class="dashboard-section">
 
             <div class="section-heading">
@@ -211,6 +232,7 @@
                             <th>Contact Number</th>
                             <th>Username</th>
                             <th>Account Role</th>
+                            <th>Gender</th>
                             <th>Account Status</th>
                             <th>Actions</th>
                         </tr>
@@ -218,7 +240,7 @@
 
                     <tbody id="staff-records">
                         <tr>
-                            <td colspan="8">Loading accounts...</td>
+                            <td colspan="9">Loading accounts...</td>
                         </tr>
                     </tbody>
 
@@ -234,7 +256,7 @@
         <p>&copy; 2026 Splash &amp; Dash Car Wash Management System</p>
     </footer>
 
-    <script src="js/portal-auth.js"></script>
     <script src="js/admin-staff.js"></script>
+
 </body>
 </html>

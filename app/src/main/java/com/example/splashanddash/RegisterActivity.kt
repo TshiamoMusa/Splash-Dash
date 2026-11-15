@@ -2,11 +2,11 @@ package com.example.splashanddash
 
 import android.os.Bundle
 import android.util.Patterns
-import android.widget.EditText
-import android.widget.LinearLayout
+import androidx.appcompat.app.AlertDialog
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 
+/** Customer registration screen. Creates the account through the API. */
 class RegisterActivity : BaseActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -17,42 +17,42 @@ class RegisterActivity : BaseActivity() {
 
         main.addView(
             sectionTitle(
-                "Create Account",
-                "Register securely with SplashDash"
+                "Create account",
+                "Register securely with Splash & Dash"
             )
         )
 
-        main.addView(text("Personal Information", 20f, true))
+        main.addView(sectionTitle("Personal information"))
 
-        val fullNameField = input("Full Name")
-        val emailField = input("Email Address")
-        val phoneField = input("Phone Number")
-        val addressField = input("Home Address")
+        val fullNameField = input("Full name")
+        val emailField = input("Email address")
+        val phoneField = input("Phone number")
+        val addressField = input("Home address")
 
         emailField.inputType =
             android.text.InputType.TYPE_CLASS_TEXT or
                     android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
 
-        phoneField.inputType =
-            android.text.InputType.TYPE_CLASS_PHONE
+        phoneField.inputType = android.text.InputType.TYPE_CLASS_PHONE
 
         main.addView(fullNameField)
         main.addView(emailField)
         main.addView(phoneField)
         main.addView(addressField)
 
-        main.addView(text("Security", 20f, true))
+        main.addView(sectionTitle("Security"))
 
         val passwordField = input("Password")
         passwordField.inputType = 129
 
-        val confirmPassword = input("Confirm Password")
+        val confirmPassword = input("Confirm password")
         confirmPassword.inputType = 129
 
         main.addView(passwordField)
         main.addView(confirmPassword)
+        addSpacing(main, 4)
 
-        val registerButton = button("CREATE ACCOUNT") {
+        val registerButton = button("Create account") {
 
             val fullName = fullNameField.text.toString().trim()
             val userEmail = emailField.text.toString().trim()
@@ -66,31 +66,19 @@ class RegisterActivity : BaseActivity() {
             val surname = nameParts.getOrNull(1) ?: "Customer"
 
             when {
-                fullName.isBlank() -> {
-                    showMessage("Please enter your full name.")
-                }
+                fullName.isBlank() -> showMessage("Please enter your full name.")
 
-                !Patterns.EMAIL_ADDRESS.matcher(userEmail).matches() -> {
+                !Patterns.EMAIL_ADDRESS.matcher(userEmail).matches() ->
                     showMessage("Please enter a valid email address.")
-                }
 
-                userPhone.isBlank() -> {
-                    showMessage("Please enter your phone number.")
-                }
+                userPhone.isBlank() -> showMessage("Please enter your phone number.")
 
-                userAddress.isBlank() -> {
-                    showMessage("Please enter your home address.")
-                }
+                userAddress.isBlank() -> showMessage("Please enter your home address.")
 
-                userPassword.length < 8 -> {
-                    showMessage(
-                        "Your password must contain at least 8 characters."
-                    )
-                }
+                userPassword.length < 8 ->
+                    showMessage("Your password must contain at least 8 characters.")
 
-                userPassword != confirm -> {
-                    showMessage("Passwords do not match.")
-                }
+                userPassword != confirm -> showMessage("Passwords do not match.")
 
                 else -> {
                     lifecycleScope.launch {
@@ -107,8 +95,8 @@ class RegisterActivity : BaseActivity() {
                         runOnUiThread {
                             if (result.isSuccess) {
                                 showMessage(
-                                    "Account created successfully! Please login.",
-                                    "Registration Successful"
+                                    "Account created successfully! Please log in.",
+                                    "Registration successful"
                                 ) {
                                     go(LoginActivity::class.java)
                                     finish()
@@ -124,14 +112,18 @@ class RegisterActivity : BaseActivity() {
 
         main.addView(registerButton)
 
+        addSpacing(main, 12)
+
         main.addView(
-            outlineButton("ALREADY HAVE AN ACCOUNT? LOGIN") {
+            outlineButton("Already have an account? Log in") {
                 go(LoginActivity::class.java)
             }
         )
 
+        addSpacing(main, 12)
+
         main.addView(
-            outlineButton("BACK TO HOME") {
+            outlineButton("Back to home") {
                 go(MainActivity::class.java)
             }
         )
@@ -143,15 +135,13 @@ class RegisterActivity : BaseActivity() {
 
     private fun showMessage(
         message: String,
-        title: String = "SplashDash",
+        title: String = "Splash & Dash",
         onOk: (() -> Unit)? = null
     ) {
-        android.app.AlertDialog.Builder(this)
+        AlertDialog.Builder(this)
             .setTitle(title)
             .setMessage(message)
-            .setPositiveButton("OK") { _, _ ->
-                onOk?.invoke()
-            }
+            .setPositiveButton("OK") { _, _ -> onOk?.invoke() }
             .show()
     }
 }

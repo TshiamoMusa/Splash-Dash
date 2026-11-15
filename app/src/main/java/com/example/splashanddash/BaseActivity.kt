@@ -19,7 +19,6 @@ import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
-import com.google.firebase.auth.FirebaseAuth
 
 /**
  * Base class for every screen in the Splash & Dash customer app.
@@ -112,12 +111,11 @@ open class BaseActivity : AppCompatActivity() {
     }
 
     /**
-     * Google Sign-In goes through Firebase Auth, so a Firebase user means
-     * "signed in". When the API login (JWT) is added, extend this one
-     * function and every screen is covered.
+     * Email login and Google Sign-In both end with the API saving a JWT,
+     * so a saved token means "signed in".
      */
     private fun isSignedIn(): Boolean {
-        return FirebaseAuth.getInstance().currentUser != null
+        return !ApiClient.getToken(this).isNullOrBlank()
     }
 
 

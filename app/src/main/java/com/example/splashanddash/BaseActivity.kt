@@ -1,147 +1,156 @@
 package com.example.splashanddash
 
 import android.content.Intent
+import android.content.res.ColorStateList
+import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.RippleDrawable
+import android.graphics.drawable.StateListDrawable
 import android.os.Bundle
 import android.view.Gravity
 import android.view.View
 import android.widget.Button
+import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.WindowCompat
+import com.google.firebase.auth.FirebaseAuth
 
+/**
+ * Base class for every screen in the Splash & Dash customer app.
+ *
+ * All colours come from res/values/colors.xml (light) and
+ * res/values-night/colors.xml (dark), so every screen follows the
+ * same theme automatically. Dark mode is not just a colour swap:
+ *  - light mode lifts cards with soft shadows
+ *  - dark mode lifts cards with a lighter surface and a thin border
+ *  - buttons switch to sky blue with dark text so they stay readable
+ */
 open class BaseActivity : AppCompatActivity() {
 
     // ---------------------------------------------------------
-    // Shared Colours
+    // Brand palette (same names as the website theme)
     // ---------------------------------------------------------
 
-    protected val navy: Int
-        get() = getColor(R.color.navy)
+    protected val indigoBlue: Int get() = getColor(R.color.indigo_blue)
+    protected val deepOceanBlue: Int get() = getColor(R.color.deep_ocean_blue)
+    protected val oceanBlue: Int get() = getColor(R.color.ocean_blue)
+    protected val skyBlue: Int get() = getColor(R.color.sky_blue)
+    protected val iceBlue: Int get() = getColor(R.color.ice_blue)
+    protected val white: Int get() = getColor(R.color.white)
 
-    protected val blue: Int
-        get() = getColor(R.color.blue)
+    // ---------------------------------------------------------
+    // Semantic colours (these adapt to light / dark mode)
+    // ---------------------------------------------------------
 
-    protected val brightBlue: Int
-        get() = getColor(R.color.bright_blue)
+    protected val backgroundColor: Int get() = getColor(R.color.background)
+    protected val surface: Int get() = getColor(R.color.surface)
+    protected val surfaceAlt: Int get() = getColor(R.color.surface_alt)
+    protected val textColor: Int get() = getColor(R.color.text)
+    protected val heading: Int get() = getColor(R.color.heading)
+    protected val muted: Int get() = getColor(R.color.muted)
+    protected val border: Int get() = getColor(R.color.border)
+    protected val accent: Int get() = getColor(R.color.accent)
+    protected val primary: Int get() = getColor(R.color.primary)
+    protected val onPrimary: Int get() = getColor(R.color.on_primary)
+    protected val headerStart: Int get() = getColor(R.color.header_start)
+    protected val headerEnd: Int get() = getColor(R.color.header_end)
+    protected val success: Int get() = getColor(R.color.success)
+    protected val warning: Int get() = getColor(R.color.warning)
+    protected val danger: Int get() = getColor(R.color.danger)
 
-    protected val backgroundColor: Int
-        get() = getColor(R.color.background)
+    // Older names still used by some screens. They now map to the new theme.
+    protected val navy: Int get() = getColor(R.color.navy)
+    protected val blue: Int get() = getColor(R.color.blue)
+    protected val brightBlue: Int get() = getColor(R.color.bright_blue)
 
-    protected val white: Int
-        get() = getColor(R.color.white)
-
-    protected val textColor: Int
-        get() = getColor(R.color.text)
-
-    protected val muted: Int
-        get() = getColor(R.color.muted)
-
-    protected val border: Int
-        get() = getColor(R.color.border)
-
-    protected val success: Int
-        get() = getColor(R.color.success)
-
-    protected val warning: Int
-        get() = getColor(R.color.warning)
-
-    protected val danger: Int
-        get() = getColor(R.color.danger)
+    /** True when the phone is currently in dark mode. */
+    protected val isDark: Boolean
+        get() = (resources.configuration.uiMode and
+                Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
 
 
     // ---------------------------------------------------------
-    // Activity Setup
+    // Activity setup
     // ---------------------------------------------------------
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        window.statusBarColor = blue
-        window.navigationBarColor = navy
+        // System bars blend into the screen, icons flip for light/dark.
+        window.statusBarColor = backgroundColor
+        window.navigationBarColor = backgroundColor
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            isAppearanceLightStatusBars = !isDark
+            isAppearanceLightNavigationBars = !isDark
+        }
     }
 
     override fun onStart() {
         super.onStart()
 
-        val requiredRole = when (this) {
+        if (!requiresLogin()) return
 
-            is AdminDashboardActivity,
-            is ManageBookingsActivity,
-            is ManageCustomersActivity,
-            is ManageStaffActivity,
-            is ReportsActivity -> "Admin"
-
-            is StaffDashboardActivity,
-            is ServiceQueueActivity -> "Staff"
-
-            is CustomerDashboardActivity,
-            is BookingActivity,
-            is BookingHistoryActivity,
-            is PaymentActivity -> "Customer"
-
-            else -> null
-        }
-
-        if (requiredRole == null) {
-            return
-        }
-
-        // Check the Firebase authenticated user.
-        val firebaseUser =
-            com.google.firebase.auth.FirebaseAuth
-                .getInstance()
-                .currentUser
-
-        if (firebaseUser == null) {
-
-            android.util.Log.d(
-                "SplashDashAuth",
-                "No Firebase session. Redirecting to Login."
-            )
-
-            startActivity(
-                Intent(
-                    this,
-                    LoginActivity::class.java
-                )
-            )
-
+        if (!isSignedIn()) {
+            android.util.Log.d("SplashDashAuth", "No session. Redirecting to Login.")
+            startActivity(Intent(this, LoginActivity::class.java))
             finish()
-            return
         }
+    }
 
-        // Check the role loaded from Firestore.
-        if (AppData.role != requiredRole) {
+    /** Screens that only a logged-in customer may open. */
+    private fun requiresLogin(): Boolean {
+        return this is CustomerDashboardActivity ||
+                this is BookingActivity ||
+                this is BookingHistoryActivity ||
+                this is PaymentActivity
+    }
 
-            android.util.Log.w(
-                "SplashDashAuth",
-                "Role mismatch: required=$requiredRole, " +
-                        "current=${AppData.role}"
-            )
-
-            startActivity(
-                Intent(
-                    this,
-                    LoginActivity::class.java
-                )
-            )
-
-            finish()
-            return
-        }
-
-        android.util.Log.d(
-            "SplashDashAuth",
-            "Access granted to ${javaClass.simpleName}"
-        )
+    /**
+     * Google Sign-In goes through Firebase Auth, so a Firebase user means
+     * "signed in". When the API login (JWT) is added, extend this one
+     * function and every screen is covered.
+     */
+    private fun isSignedIn(): Boolean {
+        return FirebaseAuth.getInstance().currentUser != null
     }
 
 
     // ---------------------------------------------------------
-    // Screen Container Helpers
+    // Drawable helpers (everything is built in code so it follows
+    // light/dark mode with no extra XML files)
+    // ---------------------------------------------------------
+
+    protected fun rounded(
+        fill: Int,
+        radiusDp: Int,
+        strokeColor: Int? = null,
+        strokeDp: Int = 1
+    ): GradientDrawable {
+        return GradientDrawable().apply {
+            setColor(fill)
+            cornerRadius = dp(radiusDp).toFloat()
+            if (strokeColor != null) setStroke(dp(strokeDp), strokeColor)
+        }
+    }
+
+    private fun withRipple(
+        content: GradientDrawable,
+        rippleColor: Int,
+        radiusDp: Int
+    ): RippleDrawable {
+        val mask = rounded(Color.WHITE, radiusDp)
+        return RippleDrawable(ColorStateList.valueOf(rippleColor), content, mask)
+    }
+
+
+    // ---------------------------------------------------------
+    // Screen container helpers
     // ---------------------------------------------------------
 
     open fun createScreen(): LinearLayout {
@@ -152,16 +161,14 @@ open class BaseActivity : AppCompatActivity() {
         }
     }
 
-    protected fun content(): android.widget.ScrollView {
-        return android.widget.ScrollView(this).apply {
+    protected fun content(): ScrollView {
+        return ScrollView(this).apply {
             isFillViewport = true
             setBackgroundColor(backgroundColor)
         }
     }
 
-    protected fun column(
-        padding: Int = 20
-    ): LinearLayout {
+    protected fun column(padding: Int = 20): LinearLayout {
         return LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(
@@ -176,82 +183,37 @@ open class BaseActivity : AppCompatActivity() {
 
 
     // ---------------------------------------------------------
-    // Navigation Bar
+    // Top bar
     // ---------------------------------------------------------
 
     protected fun navBar(): LinearLayout {
 
         val navigation = LinearLayout(this).apply {
-
             orientation = LinearLayout.HORIZONTAL
-
             gravity = Gravity.CENTER_VERTICAL
-
-            setPadding(
-                dp(12),
-                dp(10),
-                dp(12),
-                dp(10)
-            )
-
+            setPadding(dp(20), dp(16), dp(16), dp(16))
             background = GradientDrawable(
                 GradientDrawable.Orientation.LEFT_RIGHT,
-                intArrayOf(
-                    navy,
-                    blue
-                )
-            ).apply {
-
-                cornerRadius =
-                    dp(18).toFloat()
-            }
+                intArrayOf(headerStart, headerEnd)
+            ).apply { cornerRadius = dp(24).toFloat() }
+            elevation = if (isDark) 0f else dp(4).toFloat()
         }
-
-        // ---------------------------------------------------------
-        // APP NAME
-        // ---------------------------------------------------------
 
         val logo = TextView(this).apply {
-
-            text = "SplashDash"
-
-            textSize = 19f
-
+            text = "Splash & Dash"
+            textSize = 20f
             setTextColor(Color.WHITE)
-
-            typeface =
-                Typeface.DEFAULT_BOLD
-
-            gravity =
-                Gravity.CENTER_VERTICAL
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER_VERTICAL
         }
-
         navigation.addView(
             logo,
-            LinearLayout.LayoutParams(
-                0,
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                1f
-            )
+            LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         )
 
-        // ---------------------------------------------------------
-        // SETTINGS ONLY
-        // ---------------------------------------------------------
-
-        val settingsButton =
-            navButton("⚙ Settings")
-
-        settingsButton.setOnClickListener {
-
-            go(
-                SettingsActivity::class.java
-            )
-        }
-
-        navigation.addView(
-            settingsButton
-        )
+        val settingsButton = navButton("Settings")
+        settingsButton.setOnClickListener { go(SettingsActivity::class.java) }
+        navigation.addView(settingsButton)
 
         return navigation
     }
@@ -267,26 +229,25 @@ open class BaseActivity : AppCompatActivity() {
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
             typeface = Typeface.DEFAULT_BOLD
-            setPadding(dp(10), dp(8), dp(10), dp(8))
+            setPadding(dp(16), dp(8), dp(16), dp(8))
+            background = rounded(Color.argb(40, 255, 255, 255), 20)
             isClickable = true
             isFocusable = true
-            alpha = 0.95f
         }
     }
 
 
     // ---------------------------------------------------------
-    // Navigation Helper
+    // Navigation helper
     // ---------------------------------------------------------
 
     protected fun go(destination: Class<*>) {
-        val intent = Intent(this, destination)
-        startActivity(intent)
+        startActivity(Intent(this, destination))
     }
 
 
     // ---------------------------------------------------------
-    // Text Helper
+    // Text helpers
     // ---------------------------------------------------------
 
     protected fun text(
@@ -299,17 +260,10 @@ open class BaseActivity : AppCompatActivity() {
             text = value
             textSize = size
             setTextColor(color)
-            if (isBold) {
-                typeface = Typeface.DEFAULT_BOLD
-            }
+            if (isBold) typeface = Typeface.DEFAULT_BOLD
             setPadding(0, dp(4), 0, dp(4))
         }
     }
-
-
-    // ---------------------------------------------------------
-    // Page Header & Section Title
-    // ---------------------------------------------------------
 
     protected fun pageHeader(
         title: String,
@@ -317,37 +271,37 @@ open class BaseActivity : AppCompatActivity() {
     ): LinearLayout {
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(4), dp(22), dp(4), dp(18))
+            setPadding(dp(4), dp(20), dp(4), dp(16))
         }
 
-        val titleView = TextView(this).apply {
+        header.addView(TextView(this).apply {
             text = title
             textSize = 28f
-            setTextColor(textColor)
+            setTextColor(heading)
             typeface = Typeface.DEFAULT_BOLD
-        }
-        header.addView(titleView)
+        })
 
         if (!subtitle.isNullOrBlank()) {
-            val subtitleView = TextView(this).apply {
+            header.addView(TextView(this).apply {
                 text = subtitle
-                textSize = 15f
+                textSize = 14f
                 setTextColor(muted)
-                setPadding(0, dp(6), 0, 0)
-            }
-            header.addView(subtitleView)
+                setPadding(0, dp(4), 0, 0)
+            })
         }
 
         return header
     }
 
+    /** Small spaced-out label, same style as "PROFESSIONAL CAR CARE" on the website. */
     open fun sectionTitle(title: String): TextView {
         return TextView(this).apply {
-            text = title
-            textSize = 15f
-            setTextColor(brightBlue)
+            text = title.uppercase()
+            textSize = 12f
+            letterSpacing = 0.12f
+            setTextColor(accent)
             typeface = Typeface.DEFAULT_BOLD
-            setPadding(0, dp(12), 0, dp(10))
+            setPadding(dp(4), dp(16), 0, dp(8))
         }
     }
 
@@ -357,14 +311,16 @@ open class BaseActivity : AppCompatActivity() {
 
 
     // ---------------------------------------------------------
-    // Card Components
+    // Cards
     // ---------------------------------------------------------
 
     protected fun card(): LinearLayout {
         return LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(18), dp(18), dp(18), dp(18))
-            setBackgroundResource(R.drawable.rounded_card)
+            setPadding(dp(20), dp(20), dp(20), dp(20))
+            // Light: soft shadow. Dark: lighter surface + thin border.
+            background = rounded(surface, 20, if (isDark) border else null)
+            elevation = if (isDark) 0f else dp(3).toFloat()
         }
     }
 
@@ -375,40 +331,37 @@ open class BaseActivity : AppCompatActivity() {
         onClick: (() -> Unit)? = null
     ): LinearLayout {
         val container = card().apply {
-            val params = LinearLayout.LayoutParams(
+            layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                setMargins(0, dp(6), 0, dp(12))
-            }
-            layoutParams = params
+            ).apply { setMargins(dp(2), dp(6), dp(2), dp(14)) }
         }
 
         container.addView(TextView(this).apply {
             text = title
-            textSize = 17f
-            setTextColor(textColor)
+            textSize = 18f
+            setTextColor(heading)
             typeface = Typeface.DEFAULT_BOLD
         })
 
         container.addView(TextView(this).apply {
             text = body
             textSize = 14f
-            setTextColor(muted)
+            setTextColor(textColor)
             setPadding(0, dp(6), 0, dp(6))
         })
 
         if (actionLabel != null || onClick != null) {
-            val btnLabel = actionLabel ?: "Open"
             container.addView(LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.END
                 addView(TextView(this@BaseActivity).apply {
-                    text = btnLabel
-                    textSize = 14f
-                    setTextColor(brightBlue)
+                    text = actionLabel ?: "Open"
+                    textSize = 13f
+                    setTextColor(onPrimary)
                     typeface = Typeface.DEFAULT_BOLD
-                    setPadding(dp(8), dp(4), dp(8), dp(4))
+                    setPadding(dp(18), dp(8), dp(18), dp(8))
+                    background = rounded(primary, 20)
                 })
             })
             if (onClick != null) {
@@ -421,120 +374,142 @@ open class BaseActivity : AppCompatActivity() {
         return container
     }
 
-    protected fun metricCard(
-        title: String,
-        value: String
-    ): LinearLayout {
-        val card = card().apply {
-            val params = LinearLayout.LayoutParams(
+    protected fun metricCard(title: String, value: String): LinearLayout {
+        return metricCardValueLabel(value, title)
+    }
+
+    protected fun metricCardValueLabel(value: String, label: String): LinearLayout {
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setPadding(dp(14), dp(18), dp(14), dp(18))
+            background = rounded(surfaceAlt, 18, if (isDark) border else null)
+
+            addView(TextView(this@BaseActivity).apply {
+                text = value
+                textSize = 26f
+                setTextColor(accent)
+                typeface = Typeface.DEFAULT_BOLD
+                gravity = Gravity.CENTER
+            })
+
+            addView(TextView(this@BaseActivity).apply {
+                text = label
+                textSize = 13f
+                setTextColor(muted)
+                gravity = Gravity.CENTER
+                setPadding(0, dp(4), 0, 0)
+            })
+        }
+    }
+
+    protected fun metricRow(vararg cards: View): LinearLayout {
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                setMargins(0, dp(6), 0, dp(12))
+            ).apply { setMargins(0, dp(6), 0, dp(14)) }
+            cards.forEach { card ->
+                addView(
+                    card,
+                    LinearLayout.LayoutParams(
+                        0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
+                    ).apply { setMargins(dp(4), 0, dp(4), 0) }
+                )
             }
-            layoutParams = params
         }
-
-        val valueView = TextView(this).apply {
-            text = value
-            textSize = 28f
-            setTextColor(brightBlue)
-            typeface = Typeface.DEFAULT_BOLD
-        }
-        card.addView(valueView)
-
-        val titleView = TextView(this).apply {
-            text = title
-            textSize = 14f
-            setTextColor(muted)
-            setPadding(0, dp(5), 0, 0)
-        }
-        card.addView(titleView)
-
-        return card
     }
 
 
     // ---------------------------------------------------------
-    // Buttons & Inputs
+    // Buttons & inputs
     // ---------------------------------------------------------
 
+    /** Solid pill button. Deep ocean blue in light mode, sky blue in dark mode. */
     protected fun primaryButton(title: String): Button {
         return Button(this).apply {
             text = title
-            textSize = 15f
-            setTextColor(Color.WHITE)
+            textSize = 16f
+            setTextColor(onPrimary)
             typeface = Typeface.DEFAULT_BOLD
-            background = GradientDrawable().apply {
-                setColor(brightBlue)
-                cornerRadius = dp(14).toFloat()
-            }
             isAllCaps = false
             stateListAnimator = null
-            setPadding(dp(16), dp(10), dp(16), dp(10))
+            elevation = 0f
+            minHeight = dp(52)
+            minimumHeight = dp(52)
+            setPadding(dp(24), dp(12), dp(24), dp(12))
+            background = withRipple(
+                rounded(primary, 28),
+                Color.argb(50, Color.red(onPrimary), Color.green(onPrimary), Color.blue(onPrimary)),
+                28
+            )
         }
     }
 
     protected fun button(title: String, onClick: () -> Unit): Button {
-        return primaryButton(title).apply {
-            setOnClickListener { onClick() }
-        }
+        return primaryButton(title).apply { setOnClickListener { onClick() } }
     }
 
+    /** Pill button with an accent outline, used for secondary actions. */
     protected fun outlineButton(title: String): Button {
         return Button(this).apply {
             text = title
-            textSize = 15f
-            setTextColor(brightBlue)
+            textSize = 16f
+            setTextColor(accent)
             typeface = Typeface.DEFAULT_BOLD
-            background = GradientDrawable().apply {
-                setColor(Color.TRANSPARENT)
-                setStroke(dp(1), brightBlue)
-                cornerRadius = dp(14).toFloat()
-            }
             isAllCaps = false
             stateListAnimator = null
-            setPadding(dp(16), dp(10), dp(16), dp(10))
+            elevation = 0f
+            minHeight = dp(52)
+            minimumHeight = dp(52)
+            setPadding(dp(24), dp(12), dp(24), dp(12))
+            background = withRipple(
+                rounded(Color.TRANSPARENT, 28, accent, 2),
+                Color.argb(40, Color.red(accent), Color.green(accent), Color.blue(accent)),
+                28
+            )
         }
     }
 
     protected fun outlineButton(title: String, onClick: () -> Unit): Button {
-        return outlineButton(title).apply {
-            setOnClickListener { onClick() }
-        }
+        return outlineButton(title).apply { setOnClickListener { onClick() } }
     }
 
-    protected fun input(hint: String): android.widget.EditText {
-        return android.widget.EditText(this).apply {
+    protected fun input(hint: String): EditText {
+        return EditText(this).apply {
             setHint(hint)
             textSize = 16f
             setTextColor(textColor)
             setHintTextColor(muted)
             styleInput(this)
-            val params = LinearLayout.LayoutParams(
+            layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                setMargins(0, dp(6), 0, dp(12))
-            }
-            layoutParams = params
+            ).apply { setMargins(0, dp(6), 0, dp(12)) }
         }
     }
 
+    /** Rounded field with a thin border that turns accent blue when focused. */
     protected fun styleInput(view: View) {
-        view.setBackgroundResource(R.drawable.edit_bg)
-        view.setPadding(dp(14), dp(12), dp(14), dp(12))
+        view.background = StateListDrawable().apply {
+            addState(
+                intArrayOf(android.R.attr.state_focused),
+                rounded(surface, 14, accent, 2)
+            )
+            addState(intArrayOf(), rounded(surface, 14, border, 1))
+        }
+        view.setPadding(dp(16), dp(14), dp(16), dp(14))
     }
 
 
     // ---------------------------------------------------------
-    // Spacing & Footer Helpers
+    // Spacing & footer
     // ---------------------------------------------------------
 
     protected fun addSpacing(parent: LinearLayout, height: Int = 12) {
-        val spacer = View(this)
         parent.addView(
-            spacer,
+            View(this),
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(height))
         )
     }
@@ -554,22 +529,23 @@ open class BaseActivity : AppCompatActivity() {
 
     protected fun footer(): TextView {
         return TextView(this).apply {
-            text = "© 2026 SplashDash Car Wash"
+            text = "© 2026 Splash & Dash Car Wash"
             textSize = 12f
             setTextColor(muted)
             gravity = Gravity.CENTER
-            setPadding(0, dp(20), 0, dp(10))
+            setPadding(0, dp(24), 0, dp(12))
         }
     }
 
     protected fun dp(value: Int): Int {
         return (value * resources.displayMetrics.density).toInt()
     }
+
     protected fun showAppMessage(
         message: String,
-        title: String = "SplashDash"
+        title: String = "Splash & Dash"
     ) {
-        android.app.AlertDialog.Builder(this)
+        AlertDialog.Builder(this)
             .setTitle(title)
             .setMessage(message)
             .setPositiveButton("OK", null)

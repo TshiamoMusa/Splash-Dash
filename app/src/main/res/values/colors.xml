@@ -1,27 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- LIGHT MODE -->
 <resources>
 
-    <color name="navy">#082A44</color>
-
-    <color name="blue">#0C3C60</color>
-
-    <color name="bright_blue">#00A8FF</color>
-
-    <color name="light_blue">#EAF7FF</color>
-
-    <color name="background">#F4F7FA</color>
-
+    <!-- Brand palette (matches the website) -->
+    <color name="indigo_blue">#1E2A78</color>
+    <color name="deep_ocean_blue">#0B4A7A</color>
+    <color name="ocean_blue">#0A7BE0</color>
+    <color name="sky_blue">#5BB5F0</color>
+    <color name="ice_blue">#E8F4FD</color>
     <color name="white">#FFFFFF</color>
 
-    <color name="text">#17212B</color>
+    <!-- Semantic colours used by BaseActivity -->
+    <color name="background">#F4F9FE</color>
+    <color name="surface">#FFFFFF</color>
+    <color name="surface_alt">#E8F4FD</color>
+    <color name="text">#0F2A43</color>
+    <color name="heading">#0B4A7A</color>
+    <color name="muted">#5F7A93</color>
+    <color name="border">#D3E4F3</color>
+    <color name="accent">#0A7BE0</color>
+    <color name="primary">#0B4A7A</color>
+    <color name="on_primary">#FFFFFF</color>
+    <color name="header_start">#1E2A78</color>
+    <color name="header_end">#0A7BE0</color>
 
-    <color name="muted">#65727E</color>
+    <!-- Status colours -->
+    <color name="success">#1E9E6A</color>
+    <color name="warning">#E39A1B</color>
+    <color name="danger">#D64545</color>
 
-    <color name="border">#DCE4EA</color>
-
-    <color name="success">#1B8A5A</color>
-
-    <color name="warning">#C67C00</color>
-
-    <color name="danger">#B42318</color>
+    <!-- Old names, kept so existing screens still compile -->
+    <color name="navy">#0B4A7A</color>
+    <color name="blue">#0A7BE0</color>
+    <color name="bright_blue">#0A7BE0</color>
 
 </resources>

@@ -1,23 +1,37 @@
 <?xml version="1.0" encoding="utf-8"?>
-
+<!-- DARK MODE -->
 <resources>
 
-    <color name="navy">#061C2D</color>
-    <color name="blue">#0A4268</color>
-    <color name="bright_blue">#21B5FF</color>
+    <!-- Brand palette, tuned for dark backgrounds -->
+    <color name="indigo_blue">#4C5FD5</color>
+    <color name="deep_ocean_blue">#0B4A7A</color>
+    <color name="ocean_blue">#3D9BEA</color>
+    <color name="sky_blue">#5BB5F0</color>
+    <color name="ice_blue">#14305A</color>
+    <color name="white">#FFFFFF</color>
 
-    <color name="light_blue">#12384F</color>
-    <color name="background">#101820</color>
+    <!-- Semantic colours: lighter surfaces = higher up, no pure black -->
+    <color name="background">#07162B</color>
+    <color name="surface">#0E2440</color>
+    <color name="surface_alt">#14305A</color>
+    <color name="text">#E6F1FB</color>
+    <color name="heading">#F2F8FE</color>
+    <color name="muted">#8FA9C4</color>
+    <color name="border">#1F3B5E</color>
+    <color name="accent">#5BB5F0</color>
+    <color name="primary">#5BB5F0</color>
+    <color name="on_primary">#06223D</color>
+    <color name="header_start">#14245C</color>
+    <color name="header_end">#0B4A7A</color>
 
-    <color name="white">#1B2630</color>
+    <!-- Status colours, softened for dark -->
+    <color name="success">#4CD39A</color>
+    <color name="warning">#F2B84B</color>
+    <color name="danger">#FF7B7B</color>
 
-    <color name="text">#F1F5F8</color>
-    <color name="muted">#AAB8C2</color>
-
-    <color name="border">#30414E</color>
-
-    <color name="success">#38B77A</color>
-    <color name="warning">#E5A83B</color>
-    <color name="danger">#FF6B5F</color>
+    <!-- Old names -->
+    <color name="navy">#07162B</color>
+    <color name="blue">#5BB5F0</color>
+    <color name="bright_blue">#5BB5F0</color>
 
 </resources>

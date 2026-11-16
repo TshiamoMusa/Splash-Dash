@@ -22,6 +22,7 @@ class RegisterActivity : BaseActivity() {
             )
         )
 
+        // PERSONAL INFORMATION
         main.addView(sectionTitle("Personal information"))
 
         val fullNameField = input("Full name")
@@ -40,10 +41,11 @@ class RegisterActivity : BaseActivity() {
         main.addView(phoneField)
         main.addView(addressField)
 
+        // SECURITY
         main.addView(sectionTitle("Security"))
 
         val passwordField = input("Password")
-        passwordField.inputType = 129
+        passwordField.inputType = 129 // text + password (hidden characters)
 
         val confirmPassword = input("Confirm password")
         confirmPassword.inputType = 129
@@ -52,6 +54,7 @@ class RegisterActivity : BaseActivity() {
         main.addView(confirmPassword)
         addSpacing(main, 4)
 
+        // CREATE ACCOUNT
         val registerButton = button("Create account") {
 
             val fullName = fullNameField.text.toString().trim()
@@ -61,10 +64,12 @@ class RegisterActivity : BaseActivity() {
             val userPassword = passwordField.text.toString()
             val confirm = confirmPassword.text.toString()
 
+            // The API wants first name + surname, so split the full name at the first space.
             val nameParts = fullName.split(" ", limit = 2)
             val firstName = nameParts.getOrNull(0) ?: fullName
             val surname = nameParts.getOrNull(1) ?: "Customer"
 
+            // Validate in order; the first problem found is shown.
             when {
                 fullName.isBlank() -> showMessage("Please enter your full name.")
 
@@ -94,6 +99,7 @@ class RegisterActivity : BaseActivity() {
 
                         runOnUiThread {
                             if (result.isSuccess) {
+                                // After OK, send the new customer to the Login screen.
                                 showMessage(
                                     "Account created successfully! Please log in.",
                                     "Registration successful"
@@ -120,19 +126,16 @@ class RegisterActivity : BaseActivity() {
             }
         )
 
-        addSpacing(main, 12)
-
-        main.addView(
-            outlineButton("Back to home") {
-                go(MainActivity::class.java)
-            }
-        )
+        // The old "Back to home" button was removed: the header has a back arrow now.
 
         main.addView(footer())
         screen.addView(main)
-        setContentView(screen)
+
+        // Fixed header (back arrow) + scrolling content
+        showScreen(screen)
     }
 
+    /** Dialog with an optional action when the user taps OK. */
     private fun showMessage(
         message: String,
         title: String = "Splash & Dash",

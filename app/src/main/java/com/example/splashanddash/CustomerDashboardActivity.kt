@@ -8,9 +8,13 @@ import android.widget.TextView
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 
-/** Home screen for a logged-in customer: live booking stats and quick actions. */
+/**
+ * Landing page for a logged-in customer: live booking stats and quick actions.
+ * No back arrow here (it is the landing page); Settings shows in the header.
+ */
 class CustomerDashboardActivity : BaseActivity() {
 
+    // Stat tiles and error widgets, updated once the bookings load
     private lateinit var totalTile: LinearLayout
     private lateinit var activeTile: LinearLayout
     private lateinit var completedTile: LinearLayout
@@ -23,8 +27,9 @@ class CustomerDashboardActivity : BaseActivity() {
         val screen = content()
         val main = column()
 
-        main.addView(navBar())
+        // (The header is added by showScreen() below, so it stays fixed at the top.)
 
+        // Greeting uses the first name only
         val firstName = AppData.currentUser
             .takeIf { it.isNotBlank() && it != "Guest" }
             ?.substringBefore(" ")
@@ -38,6 +43,7 @@ class CustomerDashboardActivity : BaseActivity() {
         completedTile = metricCardValueLabel("…", "Completed")
         main.addView(metricRow(totalTile, activeTile, completedTile))
 
+        // Error message and retry button (hidden until a load fails)
         errorText = text("", 14f, false, danger).apply { visibility = View.GONE }
         retryButton = outlineButton("Retry") { loadStats() }.apply { visibility = View.GONE }
         main.addView(errorText)
@@ -72,6 +78,7 @@ class CustomerDashboardActivity : BaseActivity() {
 
         addSpacing(main, 4)
 
+        // Log out: clear the saved token and return to Login
         main.addView(
             outlineButton("Log out") {
                 ApiClient.clearSession(this@CustomerDashboardActivity)
@@ -83,9 +90,12 @@ class CustomerDashboardActivity : BaseActivity() {
         main.addView(footer())
 
         screen.addView(main)
-        setContentView(screen)
+
+        // Fixed header (Settings, no back arrow) + scrolling content
+        showScreen(screen)
     }
 
+    /** Refresh the stats every time the dashboard becomes visible. */
     override fun onResume() {
         super.onResume()
         if (!ApiClient.getToken(this).isNullOrBlank()) {
@@ -93,10 +103,12 @@ class CustomerDashboardActivity : BaseActivity() {
         }
     }
 
+    /** Writes a number into a stat tile (child 0 is the big number). */
     private fun setTile(tile: LinearLayout, value: String) {
         (tile.getChildAt(0) as TextView).text = value
     }
 
+    /** Loads the bookings and fills the Total / Active / Completed tiles. */
     private fun loadStats() {
         errorText.visibility = View.GONE
         retryButton.visibility = View.GONE
@@ -107,6 +119,7 @@ class CustomerDashboardActivity : BaseActivity() {
 
             result.onSuccess { bookings ->
                 setTile(totalTile, bookings.size.toString())
+                // "Active" = pending or confirmed
                 setTile(
                     activeTile,
                     bookings.count {

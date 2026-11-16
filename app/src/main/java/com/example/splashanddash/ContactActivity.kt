@@ -1,11 +1,10 @@
 package com.example.splashanddash
 
 import android.os.Bundle
-import android.graphics.Color
 import android.view.Gravity
-import android.widget.EditText
 import android.widget.Toast
 
+/** Contact details and a simple message form. */
 class ContactActivity : BaseActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -56,27 +55,15 @@ class ContactActivity : BaseActivity() {
             )
         )
 
-        val name = input(
-            "Your Name"
-        )
+        val name = input("Your Name")
+        val email = input("Email Address")
+        val message = input("Your Message")
 
-        val email = input(
-            "Email Address"
-        )
-
-        val message = input(
-            "Your Message"
-        )
-
+        // Make the message box tall and top-aligned
         message.setSingleLine(false)
         message.minLines = 5
         message.gravity = Gravity.TOP
-        message.setPadding(
-            dp(15),
-            dp(14),
-            dp(15),
-            dp(14)
-        )
+        message.setPadding(dp(15), dp(14), dp(15), dp(14))
 
         main.addView(name)
         main.addView(email)
@@ -85,12 +72,12 @@ class ContactActivity : BaseActivity() {
         main.addView(
             button("SEND MESSAGE") {
 
+                // All three fields are required
                 if (
                     name.text.isBlank() ||
                     email.text.isBlank() ||
                     message.text.isBlank()
                 ) {
-
                     Toast.makeText(
                         this,
                         "Please complete all fields.",
@@ -100,28 +87,27 @@ class ContactActivity : BaseActivity() {
                     return@button
                 }
 
+                // Demo only: the message is not sent anywhere yet.
                 Toast.makeText(
                     this,
                     "Message sent successfully!",
                     Toast.LENGTH_SHORT
                 ).show()
 
+                // Clear the form after "sending"
                 name.text.clear()
                 email.text.clear()
                 message.text.clear()
             }
         )
 
-        main.addView(
-            outlineButton("BACK TO HOME") {
-                go(MainActivity::class.java)
-            }
-        )
+        // The old "BACK TO HOME" button was removed: the header has a back arrow now.
 
         main.addView(footer())
 
         screen.addView(main)
 
-        setContentView(screen)
+        // Fixed header (back arrow) + scrolling content
+        showScreen(screen)
     }
 }

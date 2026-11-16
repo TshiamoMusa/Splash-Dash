@@ -10,12 +10,13 @@ import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.launch
 
 /**
- * Entry screen of the customer app.
+ * Login screen of the customer app.
  * Supports email/password login through the API and Google Sign-In
  * (Firebase Auth, then synced to the API).
  */
 class LoginActivity : BaseActivity() {
 
+    // Guards against double taps while a login is running / after success.
     private var isLoggingIn = false
     private var hasNavigated = false
 
@@ -63,6 +64,7 @@ class LoginActivity : BaseActivity() {
                 val identifier = email.text.toString().trim()
                 val userPassword = password.text.toString()
 
+                // Basic validation before calling the API
                 if (identifier.isBlank()) {
                     showMessage("Enter your email address.")
                     return@button
@@ -100,7 +102,7 @@ class LoginActivity : BaseActivity() {
 
         addSpacing(main, 8)
 
-        // GOOGLE SIGN-IN
+        // GOOGLE SIGN-IN (Firebase first, then synced to our API)
         main.addView(
             outlineButton("Continue with Google") {
 
@@ -115,6 +117,7 @@ class LoginActivity : BaseActivity() {
                                 if (success) {
                                     val user = FirebaseAuth.getInstance().currentUser
                                     if (user != null) {
+                                        // Tell our API about the Google user so it issues a token.
                                         lifecycleScope.launch {
                                             val apiResult = ApiClient.googleLogin(
                                                 this@LoginActivity,
@@ -161,19 +164,14 @@ class LoginActivity : BaseActivity() {
             }
         )
 
-        addSpacing(main, 12)
-
-        // BACK TO HOME
-        main.addView(
-            outlineButton("Back to home") {
-                if (!isLoggingIn) go(MainActivity::class.java)
-            }
-        )
+        // The old "Back to home" button was removed: the header has a back arrow now.
 
         main.addView(footer())
 
         screen.addView(main)
-        setContentView(screen)
+
+        // Fixed header (back arrow) + scrolling content
+        showScreen(screen)
     }
 
     /** The app is customer-only, so every successful login lands on the customer dashboard. */
@@ -185,6 +183,7 @@ class LoginActivity : BaseActivity() {
         finish()
     }
 
+    /** Shows a dialog, but only if the screen is still alive. */
     private fun showMessage(message: String) {
         if (isFinishing || isDestroyed) return
         showAppMessage(message)

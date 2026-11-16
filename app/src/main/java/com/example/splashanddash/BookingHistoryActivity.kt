@@ -1,7 +1,7 @@
 package com.example.splashanddash
 
-import android.os.Bundle
 import android.graphics.Typeface
+import android.os.Bundle
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
@@ -11,6 +11,7 @@ import kotlinx.coroutines.launch
 /** Lists the customer's bookings (upcoming and past) with pay, edit and cancel actions. */
 class BookingHistoryActivity : BaseActivity() {
 
+    // Holds the booking cards; cleared and refilled on every load
     private lateinit var listContainer: LinearLayout
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -19,7 +20,7 @@ class BookingHistoryActivity : BaseActivity() {
         val screen = content()
         val main = column()
 
-        main.addView(backLink())
+        // (The old in-page back link was removed: the header has a back arrow now.)
         main.addView(pageHeader("My bookings", "View, edit or cancel your bookings"))
 
         main.addView(
@@ -32,9 +33,12 @@ class BookingHistoryActivity : BaseActivity() {
         main.addView(footer())
 
         screen.addView(main)
-        setContentView(screen)
+
+        // Fixed header (back arrow) + scrolling content
+        showScreen(screen)
     }
 
+    /** Reload every time the screen comes back (e.g. after editing or paying). */
     override fun onResume() {
         super.onResume()
         if (!ApiClient.getToken(this).isNullOrBlank()) {
@@ -42,6 +46,7 @@ class BookingHistoryActivity : BaseActivity() {
         }
     }
 
+    /** Layout params with a top margin, used to space buttons inside a card. */
     private fun gap(top: Int = 12): LinearLayout.LayoutParams {
         return LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT,
@@ -49,6 +54,7 @@ class BookingHistoryActivity : BaseActivity() {
         ).apply { setMargins(0, dp(top), 0, 0) }
     }
 
+    /** Fetches the bookings from the API and rebuilds the list. */
     private fun loadBookings() {
         listContainer.removeAllViews()
         listContainer.addView(text("Loading your bookings…", 15f, false, muted))
@@ -59,6 +65,7 @@ class BookingHistoryActivity : BaseActivity() {
 
             listContainer.removeAllViews()
 
+            // Error state with a retry button
             if (result.isFailure) {
                 listContainer.addView(
                     text(result.exceptionOrNull()?.message ?: "Could not load your bookings.", 15f, false, danger)
@@ -69,6 +76,7 @@ class BookingHistoryActivity : BaseActivity() {
 
             val bookings = result.getOrNull() ?: emptyList()
 
+            // Empty state
             if (bookings.isEmpty()) {
                 listContainer.addView(
                     card(
@@ -80,6 +88,7 @@ class BookingHistoryActivity : BaseActivity() {
                 return@launch
             }
 
+            // Active bookings go under "Upcoming" (soonest first); everything else is "Past".
             val activeStatuses = setOf("pending", "confirmed", "in progress")
 
             val upcoming = bookings
@@ -100,6 +109,7 @@ class BookingHistoryActivity : BaseActivity() {
         }
     }
 
+    /** One card per booking: details plus Pay / Edit / Cancel buttons where allowed. */
     private fun bookingCard(booking: BookingItem): LinearLayout {
         val container = card().apply {
             layoutParams = LinearLayout.LayoutParams(
@@ -108,7 +118,7 @@ class BookingHistoryActivity : BaseActivity() {
             ).apply { setMargins(dp(2), dp(6), dp(2), dp(14)) }
         }
 
-        // Service name + status
+        // Service name + status badge on one row
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = android.view.Gravity.CENTER_VERTICAL
@@ -136,6 +146,7 @@ class BookingHistoryActivity : BaseActivity() {
 
         container.addView(text(money(booking.totalAmount), 17f, true, accent))
 
+        // What the customer is allowed to do depends on the status
         val status = booking.bookingStatus.lowercase()
         val canEdit = status == "pending"
         val canCancel = status == "pending" || status == "confirmed"
@@ -174,6 +185,7 @@ class BookingHistoryActivity : BaseActivity() {
         return container
     }
 
+    /** Asks for confirmation, then cancels the booking through the API. */
     private fun confirmCancel(booking: BookingItem) {
         AlertDialog.Builder(this)
             .setTitle("Cancel booking")
@@ -184,7 +196,7 @@ class BookingHistoryActivity : BaseActivity() {
                     if (isFinishing || isDestroyed) return@launch
 
                     if (result.isSuccess) {
-                        loadBookings()
+                        loadBookings() // refresh the list
                     } else {
                         showAppMessage(result.exceptionOrNull()?.message ?: "Could not cancel booking.")
                     }

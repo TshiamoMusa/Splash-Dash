@@ -11,6 +11,7 @@ import kotlinx.coroutines.launch
 /** Checkout: pay for a pending booking online, by EFT or with cash. */
 class PaymentActivity : BaseActivity() {
 
+    // Holds the loading text / payment form; cleared and refilled on every load
     private lateinit var body: LinearLayout
     private var isPaying = false
 
@@ -20,7 +21,7 @@ class PaymentActivity : BaseActivity() {
         val screen = content()
         val main = column()
 
-        main.addView(backLink())
+        // (The old in-page back link was removed: the header has a back arrow now.)
         main.addView(pageHeader("Checkout", "Pay for a pending booking"))
 
         body = column(0)
@@ -29,9 +30,12 @@ class PaymentActivity : BaseActivity() {
         main.addView(footer())
 
         screen.addView(main)
-        setContentView(screen)
+
+        // Fixed header (back arrow) + scrolling content
+        showScreen(screen)
     }
 
+    /** Reload every time the screen comes back so the pending list is current. */
     override fun onResume() {
         super.onResume()
         if (!ApiClient.getToken(this).isNullOrBlank()) {
@@ -39,6 +43,7 @@ class PaymentActivity : BaseActivity() {
         }
     }
 
+    /** Loads the customer's bookings and keeps only the ones waiting for payment. */
     private fun fetchBookings() {
         body.removeAllViews()
         body.addView(text("Loading your bookings…", 15f, false, muted))
@@ -49,6 +54,7 @@ class PaymentActivity : BaseActivity() {
 
             body.removeAllViews()
 
+            // Error state with a retry button
             if (result.isFailure) {
                 body.addView(
                     text(result.exceptionOrNull()?.message ?: "Could not load your bookings.", 15f, false, danger)
@@ -61,6 +67,7 @@ class PaymentActivity : BaseActivity() {
                 .filter { it.bookingStatus.equals("Pending", ignoreCase = true) }
 
             if (pending.isEmpty()) {
+                // Nothing to pay
                 body.addView(
                     card(
                         "Nothing to pay",
@@ -74,6 +81,7 @@ class PaymentActivity : BaseActivity() {
         }
     }
 
+    /** Builds the booking picker, payment method chips, card fields and Pay button. */
     private fun renderPaymentForm(bookings: List<BookingItem>) {
 
         // BOOKING
@@ -91,6 +99,7 @@ class PaymentActivity : BaseActivity() {
 
         val cardFields = column(0)
 
+        // Card fields are only shown for "Pay online" (index 0)
         val methodGroup = choiceGroup(methodLabels, 3) { index ->
             cardFields.visibility = if (index == 0) View.VISIBLE else View.GONE
         }
@@ -119,6 +128,7 @@ class PaymentActivity : BaseActivity() {
                 val selected = bookings.getOrNull(bookingGroup.index) ?: return@button
                 val method = methodValues[methodGroup.index]
 
+                // Validate the card details only for online payment
                 if (methodGroup.index == 0) {
                     val digits = cardNumber.text.toString().filter { it.isDigit() }
                     val expiryOk = Regex("^(0[1-9]|1[0-2])/\\d{2}$")
@@ -144,6 +154,7 @@ class PaymentActivity : BaseActivity() {
         )
     }
 
+    /** Sends the payment to the API and shows the receipt details. */
     private fun pay(booking: BookingItem, method: String) {
         isPaying = true
 
@@ -158,6 +169,7 @@ class PaymentActivity : BaseActivity() {
                 return@launch
             }
 
+            // Receipt details returned by the API
             val json = result.getOrNull()
             val reference = json?.optString("referenceNumber", "") ?: ""
             val transaction = json?.optString("transactionId", "") ?: ""

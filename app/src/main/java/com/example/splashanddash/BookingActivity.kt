@@ -20,6 +20,7 @@ import java.util.Locale
 class BookingActivity : BaseActivity() {
 
     companion object {
+        // Keys used to pass an existing booking in when editing
         private const val EXTRA_BOOKING_ID = "booking_id"
         private const val EXTRA_SERVICE = "booking_service"
         private const val EXTRA_VEHICLE = "booking_vehicle"
@@ -58,6 +59,7 @@ class BookingActivity : BaseActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // editId is -1 when creating a new booking
         val editId = intent.getIntExtra(EXTRA_BOOKING_ID, -1)
         val isEdit = editId != -1
 
@@ -73,7 +75,7 @@ class BookingActivity : BaseActivity() {
         val screen = content()
         val main = column()
 
-        main.addView(backLink())
+        // (The old in-page back link was removed: the header has a back arrow now.)
         main.addView(
             pageHeader(
                 if (isEdit) "Edit booking" else "Book a car wash",
@@ -90,7 +92,7 @@ class BookingActivity : BaseActivity() {
         )
         main.addView(vehicleGroup.view)
 
-        // LOCATION
+        // LOCATION (address field only appears for house calls)
         main.addView(sectionTitle("Location"))
         val initialLocation = locationValues.indexOf(prefillLocation).coerceAtLeast(0)
         val addressField = input("House-call address (blank = your home address)")
@@ -106,7 +108,7 @@ class BookingActivity : BaseActivity() {
         main.addView(locationGroup.view)
         main.addView(addressField)
 
-        // SERVICE
+        // SERVICE (loaded from the API)
         main.addView(sectionTitle("Service"))
         val serviceStatus = text("Loading services…", 14f, false, muted)
         val serviceHolder = column(0)
@@ -136,7 +138,7 @@ class BookingActivity : BaseActivity() {
             }
         }
 
-        // DATE & TIME
+        // DATE & TIME (read-only fields that open pickers)
         main.addView(sectionTitle("Date & time"))
         val dateField = input("Choose a date")
         val timeField = input("Choose a time")
@@ -146,7 +148,7 @@ class BookingActivity : BaseActivity() {
             it.isCursorVisible = false
         }
 
-        // Pre-fill when editing
+        // Pre-fill date and time when editing
         ApiClient.parseApiDate(intent.getStringExtra(EXTRA_DATETIME) ?: "")?.let { date ->
             val cal = Calendar.getInstance().apply { time = date }
             chosenDate.timeInMillis = cal.timeInMillis
@@ -169,6 +171,7 @@ class BookingActivity : BaseActivity() {
                 chosenDate.get(Calendar.MONTH),
                 chosenDate.get(Calendar.DAY_OF_MONTH)
             )
+            // No dates in the past
             picker.datePicker.minDate = System.currentTimeMillis() - 1000
             picker.show()
         }
@@ -205,6 +208,7 @@ class BookingActivity : BaseActivity() {
                 val group = serviceGroup
                 val service = group?.let { services.getOrNull(it.index) }
 
+                // The date + time the customer picked, as one Calendar
                 val scheduled = Calendar.getInstance().apply {
                     set(
                         chosenDate.get(Calendar.YEAR),
@@ -217,6 +221,7 @@ class BookingActivity : BaseActivity() {
                     set(Calendar.MILLISECOND, 0)
                 }
 
+                // Validate in order; the first problem found is shown.
                 when {
                     service == null ->
                         showAppMessage("Services are still loading. Please wait a moment.")
@@ -232,6 +237,7 @@ class BookingActivity : BaseActivity() {
                         showAppMessage("Please choose a time in the future.")
 
                     else -> {
+                        // Only house calls send an address (blank = use the customer's home address)
                         val address = if (isHouseCall) {
                             addressField.text.toString().trim().ifBlank { null }
                         } else {
@@ -253,9 +259,12 @@ class BookingActivity : BaseActivity() {
 
         main.addView(footer())
         screen.addView(main)
-        setContentView(screen)
+
+        // Fixed header (back arrow) + scrolling content
+        showScreen(screen)
     }
 
+    /** Opening-hours text shown under the date and time fields. */
     private fun hoursMessage(isHouseCall: Boolean): String {
         return if (isHouseCall) {
             "House calls are available from 08:00 to 17:00."
@@ -264,6 +273,7 @@ class BookingActivity : BaseActivity() {
         }
     }
 
+    /** Sends the new booking (or the edit) to the API and shows the result. */
     private fun submitBooking(
         editId: Int,
         service: ServiceItem,
@@ -299,6 +309,7 @@ class BookingActivity : BaseActivity() {
             }
 
             if (editId != -1) {
+                // Edit finished: just close the screen after OK.
                 AlertDialog.Builder(this@BookingActivity)
                     .setTitle("Booking updated")
                     .setMessage("Your changes were saved.")
@@ -306,6 +317,7 @@ class BookingActivity : BaseActivity() {
                     .setPositiveButton("OK") { _, _ -> finish() }
                     .show()
             } else {
+                // New booking: offer to pay now or go to the bookings list.
                 AlertDialog.Builder(this@BookingActivity)
                     .setTitle("Booking created")
                     .setMessage("Your booking is pending until you pay for it.")

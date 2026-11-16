@@ -115,7 +115,9 @@ open class BaseActivity : AppCompatActivity() {
         return this is CustomerDashboardActivity ||
                 this is BookingActivity ||
                 this is BookingHistoryActivity ||
-                this is PaymentActivity
+                this is PaymentActivity ||
+                this is SettingsActivity ||
+                this is ProfileActivity
     }
 
     /**

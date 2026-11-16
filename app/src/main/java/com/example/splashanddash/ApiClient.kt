@@ -52,9 +52,10 @@ data class CustomerProfile(
  */
 object ApiClient {
 
+    // Tag used for every log line in this file (filter Logcat by "SplashDashApi")
     private const val TAG = "SplashDashApi"
 
-    // UPDATED: Pointing to your live Render backend service URL (matches the website backend).
+    // Live Render backend (same one the website uses).
     private const val BASE_URL = "https://splash-dash-api-vxly.onrender.com/api"
 
     // Render's free tier sleeps when idle; the first request can take 30-60 seconds.
@@ -65,6 +66,7 @@ object ApiClient {
     const val LOCATION_ON_SITE = "On-site"
     const val LOCATION_HOUSE_CALL = "House Call"
 
+    // Friendly messages shown to the user
     private const val MSG_STARTING_UP =
         "The server is starting up. Please wait a moment and try again."
     private const val MSG_TIMEOUT =
@@ -74,6 +76,7 @@ object ApiClient {
     private const val MSG_SESSION_EXPIRED =
         "Your session has expired. Please log in again."
 
+    /** Raw HTTP answer: status code + body text. */
     private class ApiResponse(val code: Int, val body: String) {
         val isOk: Boolean get() = code in 200..299
     }
@@ -91,13 +94,16 @@ object ApiClient {
     fun getToken(context: Context): String? {
         val token = getPrefs(context).getString("auth_token", null) ?: return null
 
+        // An expired token is wiped so the app treats the user as logged out.
         if (isExpired(token)) {
+            Log.d(TAG, "Saved token is expired or unreadable. Clearing session.")
             clearSession(context)
             return null
         }
         return token
     }
 
+    /** Stores the token and basic account info after a successful login. */
     fun saveSession(context: Context, token: String, role: String, name: String, userId: Int) {
         getPrefs(context).edit()
             .putString("auth_token", token)
@@ -110,20 +116,39 @@ object ApiClient {
         AppData.role = role
     }
 
+    /** Removes everything saved for the user (used for log out and expired sessions). */
     fun clearSession(context: Context) {
         getPrefs(context).edit().clear().apply()
         AppData.signOut()
     }
 
-    /** Reads the expiry time inside the JWT. Anything unreadable counts as expired. */
+    /**
+     * Reads the expiry time (exp) inside the JWT.
+     *  - No exp claim  -> treated as still valid (the server decides).
+     *  - Unreadable    -> treated as expired.
+     * Note: the phone's clock is used, so a wrong emulator date can make a fresh
+     * token look expired. Check the emulator's date and time if login keeps bouncing.
+     */
     private fun isExpired(token: String): Boolean {
         return try {
             val payload = String(
-                Base64.decode(token.split(".")[1], Base64.URL_SAFE),
+                Base64.decode(
+                    token.split(".")[1],
+                    // JWTs use URL-safe base64 with no padding
+                    Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP
+                ),
                 Charsets.UTF_8
             )
-            JSONObject(payload).getLong("exp") * 1000 < System.currentTimeMillis()
+            val json = JSONObject(payload)
+
+            if (!json.has("exp")) return false
+
+            val expiresAtMs = json.getLong("exp") * 1000
+            val now = System.currentTimeMillis()
+            Log.d(TAG, "Token expires at $expiresAtMs, phone time is $now")
+            expiresAtMs < now
         } catch (e: Exception) {
+            Log.e(TAG, "Could not read token expiry", e)
             true
         }
     }
@@ -133,6 +158,7 @@ object ApiClient {
     // Shared request helpers
     // ---------------------------------------------------------
 
+    /** Turns the response text into a JSONObject, even if the server sent plain text. */
     private fun parseJsonSafe(text: String): JSONObject {
         val trimmed = text.trim()
         return when {
@@ -142,6 +168,7 @@ object ApiClient {
         }
     }
 
+    /** Turns the response text into a JSONArray (empty if it is not an array). */
     private fun parseArray(text: String): JSONArray {
         val trimmed = text.trim()
         return if (trimmed.startsWith("[")) JSONArray(trimmed) else JSONArray()
@@ -152,6 +179,10 @@ object ApiClient {
         return if (isNull(name)) null else getString(name)
     }
 
+    /**
+     * Sends one HTTP request on a background thread and returns the raw response.
+     * Network problems and server start-up delays are turned into friendly messages.
+     */
     private suspend fun send(
         context: Context?,
         method: String,
@@ -169,6 +200,7 @@ object ApiClient {
             connection.readTimeout = TIMEOUT_MS
             connection.setRequestProperty("Accept", "application/json")
 
+            // Logged-in calls send the saved token
             if (authenticated && context != null) {
                 val token = getToken(context)
                 if (!token.isNullOrBlank()) {
@@ -176,6 +208,7 @@ object ApiClient {
                 }
             }
 
+            // Send the JSON body, if there is one
             if (body != null) {
                 connection.setRequestProperty("Content-Type", "application/json")
                 connection.doOutput = true
@@ -185,13 +218,17 @@ object ApiClient {
             }
 
             val code = connection.responseCode
+            Log.d(TAG, "$method $path -> HTTP $code")
+
             val stream = if (code in 200..299) connection.inputStream else connection.errorStream
             val text = stream?.bufferedReader()?.use { it.readText() } ?: ""
 
             when {
+                // Render is waking up
                 code == 502 || code == 503 || code == 504 ->
                     Result.failure(Exception(MSG_STARTING_UP))
 
+                // Token rejected on a logged-in call: wipe it so the user logs in again
                 authenticated && code == 401 -> {
                     if (context != null) clearSession(context)
                     Result.failure(Exception(MSG_SESSION_EXPIRED))
@@ -213,6 +250,10 @@ object ApiClient {
         }
     }
 
+    /**
+     * Sends a request and returns the JSON answer.
+     * On an error status, the API's own "message" is used as the error text.
+     */
     private suspend fun callJson(
         context: Context?,
         method: String,
@@ -231,7 +272,9 @@ object ApiClient {
         } else {
             parseJsonSafe(res.body).optString("message", errorFallback)
         }
-        return Result.failure(Exception(message))
+
+        // The status code is added so a failed login shows exactly what the server said
+        return Result.failure(Exception("$message (HTTP ${res.code})"))
     }
 
     /** Saves the session only for customer accounts; staff/admin use the website. */
@@ -243,8 +286,15 @@ object ApiClient {
         val token = json.optString("token", "")
         val account = json.optJSONObject("account")
 
+        // Shows what the server returned (safe: the token itself is not logged)
+        Log.d(
+            TAG,
+            "Login response keys=${json.keys().asSequence().toList()} " +
+                    "hasToken=${token.isNotBlank()} role=${account?.optString("role")}"
+        )
+
         if (token.isBlank() || account == null) {
-            return Result.failure(Exception("Login failed. Please try again."))
+            return Result.failure(Exception("Login failed. The server did not return a token."))
         }
 
         if (account.optString("role", "") != "Customer") {
@@ -289,6 +339,7 @@ object ApiClient {
     // Account
     // ---------------------------------------------------------
 
+    /** Email + password login. The API accepts an email (or a username for staff). */
     suspend fun login(
         context: Context,
         identifier: String,
@@ -306,6 +357,7 @@ object ApiClient {
             )
     }
 
+    /** Google Sign-In: tells the API about the Firebase user so it issues a token. */
     suspend fun googleLogin(
         context: Context,
         email: String,
@@ -329,6 +381,7 @@ object ApiClient {
             )
     }
 
+    /** Creates a customer account. Field names match RegisterCustomerRequest in the API. */
     suspend fun registerCustomer(
         context: Context,
         firstName: String,
@@ -350,6 +403,7 @@ object ApiClient {
         return callJson(context, "POST", "/Customers/register", body, false, "Registration failed.")
     }
 
+    /** Loads the logged-in customer's profile. */
     suspend fun getProfile(context: Context): Result<CustomerProfile> {
         return callJson(context, "GET", "/Customers/profile", null, true, "Could not load your profile.")
             .map { obj ->
@@ -363,6 +417,7 @@ object ApiClient {
             }
     }
 
+    /** Updates the saved home address. */
     suspend fun updateAddress(context: Context, homeAddress: String): Result<JSONObject> {
         val body = JSONObject().apply { put("homeAddress", homeAddress.trim()) }
         return callJson(context, "PUT", "/Customers/address", body, true, "Could not update your address.")
@@ -373,6 +428,7 @@ object ApiClient {
     // Services & bookings
     // ---------------------------------------------------------
 
+    /** Loads the list of services (public, no login needed). */
     suspend fun getServices(): Result<List<ServiceItem>> {
         val res = send(null, "GET", "/Services")
             .getOrElse { return Result.failure(it) }
@@ -413,6 +469,7 @@ object ApiClient {
         return callJson(context, "POST", "/Bookings", body, true, "Could not create booking.")
     }
 
+    /** Loads every booking that belongs to the logged-in customer. */
     suspend fun getCustomerBookings(context: Context): Result<List<BookingItem>> {
         val res = send(context, "GET", "/Bookings/my-bookings", null, true)
             .getOrElse { return Result.failure(it) }
@@ -464,6 +521,7 @@ object ApiClient {
         return callJson(context, "PUT", "/Bookings/$bookingId/cancel", null, true, "Could not cancel booking.")
     }
 
+    /** Builds the JSON body shared by create and update booking. */
     private fun bookingBody(
         serviceId: Int,
         vehicleType: String,
@@ -485,6 +543,7 @@ object ApiClient {
     // Payments
     // ---------------------------------------------------------
 
+    /** Pays for a booking. paymentMethod must be PayFast, EFT or Cash. */
     suspend fun makePayment(
         context: Context,
         bookingId: Int,

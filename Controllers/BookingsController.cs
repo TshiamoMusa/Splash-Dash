@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Authorization;
+﻿
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SplashDash.Api.Data;
@@ -11,7 +12,7 @@ namespace SplashDash.Api.Controllers;
 [Route("api/[controller]")]
 public class BookingsController : ControllerBase
 {
-    // The only statuses a booking can have. Must match chk_booking_status in schema.sql.
+    // These are the only booking statuses allowed by the database.
     private static readonly string[] AllowedStatuses =
     {
         "Pending",
@@ -30,7 +31,6 @@ public class BookingsController : ControllerBase
 
     // ------------------------------------------------------------
     // CUSTOMER: view own bookings
-    // Customers can view only their own bookings.
     // ------------------------------------------------------------
     [Authorize(Roles = "Customer")]
     [HttpGet("my-bookings")]
@@ -75,10 +75,7 @@ public class BookingsController : ControllerBase
     }
 
     // ------------------------------------------------------------
-    // STAFF / ADMIN: shared booking queue
-    // Everyone shares one queue (no per-staff assignment).
-    // Used by the staff dashboard, staff service queue, admin
-    // bookings page and admin reports page.
+    // STAFF / ADMIN: view the shared booking queue
     // ------------------------------------------------------------
     [Authorize(Roles = "Staff,Admin")]
     [HttpGet("all")]
@@ -105,14 +102,18 @@ public class BookingsController : ControllerBase
                 b.BookingAddress,
                 b.BookingStatus,
                 b.TotalAmount,
-                // Payment details (null until the customer pays in the app).
+
+                // Payment details are null until a payment exists.
                 PaymentMethod = b.Payment == null
                     ? null
                     : b.Payment.PaymentMethod,
+
                 PaymentStatus = b.Payment == null
                     ? null
                     : b.Payment.PaymentStatus,
+
                 b.StaffId,
+
                 StaffName = b.Staff == null
                     ? null
                     : b.Staff.User!.FirstName + " " + b.Staff.User.Surname
@@ -222,7 +223,10 @@ public class BookingsController : ControllerBase
             CustomerId = customer.CustomerId,
             ServiceId = service.ServiceId,
             VehicleType = request.VehicleType,
-            BookingDateTime = request.BookingDateTime,
+
+            // PostgreSQL requires DateTimeOffset values to use UTC.
+            BookingDateTime = request.BookingDateTime.ToUniversalTime(),
+
             LocationType = request.LocationType,
             BookingAddress = bookingAddress,
             BookingStatus = "Pending",
@@ -253,12 +257,7 @@ public class BookingsController : ControllerBase
     }
 
     // ------------------------------------------------------------
-    // STAFF / ADMIN: move a booking to a new status (or cancel it)
-    //
-    // Business rules:
-    //   * Cancelled bookings are final. The customer must book again.
-    //   * Completed bookings can only be changed by an Admin, so a
-    //     staff member cannot reopen or cancel finished work.
+    // STAFF / ADMIN: update booking status
     // ------------------------------------------------------------
     [Authorize(Roles = "Staff,Admin")]
     [HttpPut("{id:int}/status")]
@@ -266,9 +265,11 @@ public class BookingsController : ControllerBase
         int id,
         UpdateBookingStatusRequest request)
     {
-        // Accept any letter case from the client and normalise it.
+        // Accept different letter cases from the client.
         string? newStatus = AllowedStatuses.FirstOrDefault(s =>
-            s.Equals(request.Status?.Trim(), StringComparison.OrdinalIgnoreCase));
+            s.Equals(
+                request.Status?.Trim(),
+                StringComparison.OrdinalIgnoreCase));
 
         if (newStatus == null)
         {
@@ -301,6 +302,7 @@ public class BookingsController : ControllerBase
             });
         }
 
+        // Cancelled bookings cannot be reopened.
         if (currentStatus == "Cancelled")
         {
             return BadRequest(new
@@ -309,6 +311,7 @@ public class BookingsController : ControllerBase
             });
         }
 
+        // Only administrators can change completed bookings.
         if (currentStatus == "Completed" && !User.IsInRole("Admin"))
         {
             return BadRequest(new
@@ -326,6 +329,7 @@ public class BookingsController : ControllerBase
             message = newStatus == "Cancelled"
                 ? "Booking cancelled successfully."
                 : "Booking status updated successfully.",
+
             booking.BookingId,
             booking.BookingStatus
         });
@@ -336,48 +340,81 @@ public class BookingsController : ControllerBase
     // ------------------------------------------------------------
     [Authorize(Roles = "Customer")]
     [HttpPut("{id:int}")]
-    public async Task<IActionResult> UpdateBooking(int id, CreateBookingRequest request)
+    public async Task<IActionResult> UpdateBooking(
+        int id,
+        CreateBookingRequest request)
     {
-        if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out int userId))
+        if (!int.TryParse(
+            User.FindFirstValue(ClaimTypes.NameIdentifier),
+            out int userId))
         {
             return Unauthorized();
         }
 
-        var customer = await _context.Customers.FirstOrDefaultAsync(c => c.UserId == userId);
+        var customer = await _context.Customers
+            .FirstOrDefaultAsync(c => c.UserId == userId);
+
         if (customer == null)
         {
-            return NotFound(new { message = "Customer account not found." });
+            return NotFound(new
+            {
+                message = "Customer account not found."
+            });
         }
 
         var booking = await _context.Bookings
-            .FirstOrDefaultAsync(b => b.BookingId == id && b.CustomerId == customer.CustomerId);
+            .FirstOrDefaultAsync(b =>
+                b.BookingId == id &&
+                b.CustomerId == customer.CustomerId);
 
         if (booking == null)
         {
-            return NotFound(new { message = "Booking not found." });
+            return NotFound(new
+            {
+                message = "Booking not found."
+            });
         }
 
         if (booking.BookingStatus != "Pending")
         {
-            return BadRequest(new { message = "Only pending bookings can be edited." });
+            return BadRequest(new
+            {
+                message = "Only pending bookings can be edited."
+            });
         }
 
-        var service = await _context.Services.FirstOrDefaultAsync(s => s.ServiceId == request.ServiceId && s.IsActive);
+        var service = await _context.Services
+            .FirstOrDefaultAsync(s =>
+                s.ServiceId == request.ServiceId && s.IsActive);
+
         if (service == null)
         {
-            return BadRequest(new { message = "Selected service is unavailable." });
+            return BadRequest(new
+            {
+                message = "Selected service is unavailable."
+            });
         }
+
+        // Store the updated appointment time in UTC.
+        booking.BookingDateTime = request.BookingDateTime.ToUniversalTime();
 
         booking.ServiceId = service.ServiceId;
         booking.VehicleType = request.VehicleType;
-        booking.BookingDateTime = request.BookingDateTime;
         booking.LocationType = request.LocationType;
-        booking.BookingAddress = request.LocationType == "House Call" ? (request.BookingAddress ?? customer.HomeAddress) : null;
+
+        booking.BookingAddress =
+            request.LocationType == "House Call"
+                ? (request.BookingAddress ?? customer.HomeAddress)
+                : null;
+
         booking.TotalAmount = service.Price;
 
         await _context.SaveChangesAsync();
 
-        return Ok(new { message = "Booking updated successfully." });
+        return Ok(new
+        {
+            message = "Booking updated successfully."
+        });
     }
 
     // ------------------------------------------------------------
@@ -387,36 +424,60 @@ public class BookingsController : ControllerBase
     [HttpPut("{id:int}/cancel")]
     public async Task<IActionResult> CancelBooking(int id)
     {
-        if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out int userId))
+        if (!int.TryParse(
+            User.FindFirstValue(ClaimTypes.NameIdentifier),
+            out int userId))
         {
             return Unauthorized();
         }
 
-        var customer = await _context.Customers.FirstOrDefaultAsync(c => c.UserId == userId);
+        var customer = await _context.Customers
+            .FirstOrDefaultAsync(c => c.UserId == userId);
+
         if (customer == null)
         {
-            return NotFound(new { message = "Customer account not found." });
+            return NotFound(new
+            {
+                message = "Customer account not found."
+            });
         }
 
         var booking = await _context.Bookings
-            .FirstOrDefaultAsync(b => b.BookingId == id && b.CustomerId == customer.CustomerId);
+            .FirstOrDefaultAsync(b =>
+                b.BookingId == id &&
+                b.CustomerId == customer.CustomerId);
 
         if (booking == null)
         {
-            return NotFound(new { message = "Booking not found." });
+            return NotFound(new
+            {
+                message = "Booking not found."
+            });
         }
 
-        if (booking.BookingStatus != "Pending" && booking.BookingStatus != "Confirmed")
+        if (booking.BookingStatus != "Pending" &&
+            booking.BookingStatus != "Confirmed")
         {
-            return BadRequest(new { message = "This booking cannot be cancelled at this stage." });
+            return BadRequest(new
+            {
+                message = "This booking cannot be cancelled at this stage."
+            });
         }
 
         booking.BookingStatus = "Cancelled";
+
         await _context.SaveChangesAsync();
 
-        return Ok(new { message = "Booking cancelled successfully." });
+        return Ok(new
+        {
+            message = "Booking cancelled successfully."
+        });
     }
 }
+
+// ------------------------------------------------------------
+// BOOKING REQUEST MODELS
+// ------------------------------------------------------------
 
 public class CreateBookingRequest
 {

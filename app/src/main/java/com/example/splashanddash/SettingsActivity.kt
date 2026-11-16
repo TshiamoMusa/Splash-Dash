@@ -6,6 +6,7 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatDelegate
 import com.google.android.material.switchmaterial.SwitchMaterial
 
+/** App preferences: dark mode, notifications and reset. Header shows a back arrow. */
 class SettingsActivity : BaseActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -24,7 +25,16 @@ class SettingsActivity : BaseActivity() {
             setPadding(dp(20), dp(20), dp(20), dp(20))
         }
 
-        // Header
+        // Shared header: back arrow, no Settings button (we are already here)
+        root.addView(
+            navBar(),
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { setMargins(0, 0, 0, dp(16)) }
+        )
+
+        // Title
         val header = TextView(this).apply {
             text = "Settings"
             textSize = 28f
@@ -49,7 +59,9 @@ class SettingsActivity : BaseActivity() {
 
         root.addView(subtitle)
 
-        // Appearance section
+        // ---------------------------------------------------------
+        // APPEARANCE
+        // ---------------------------------------------------------
         root.addView(
             sectionTitle("Appearance")
         )
@@ -72,6 +84,7 @@ class SettingsActivity : BaseActivity() {
                         AppCompatDelegate.MODE_NIGHT_NO
                     }
 
+                // Save the choice so SplashDashApplication can restore it on next launch
                 getSharedPreferences(
                     "SplashDashSettings",
                     MODE_PRIVATE
@@ -94,7 +107,9 @@ class SettingsActivity : BaseActivity() {
             }
         )
 
-        // Notifications section
+        // ---------------------------------------------------------
+        // NOTIFICATIONS
+        // ---------------------------------------------------------
         root.addView(
             sectionTitle("Notifications")
         )
@@ -134,7 +149,9 @@ class SettingsActivity : BaseActivity() {
             }
         )
 
-        // Information section
+        // ---------------------------------------------------------
+        // ABOUT
+        // ---------------------------------------------------------
         root.addView(
             sectionTitle("About")
         )
@@ -154,11 +171,14 @@ class SettingsActivity : BaseActivity() {
             }
         )
 
-        // Reset button
+        // ---------------------------------------------------------
+        // RESET
+        // ---------------------------------------------------------
         val resetButton = primaryButton("Reset Preferences")
 
         resetButton.setOnClickListener {
 
+            // Wipe saved preferences and go back to light mode
             getSharedPreferences(
                 "SplashDashSettings",
                 MODE_PRIVATE
@@ -177,6 +197,7 @@ class SettingsActivity : BaseActivity() {
         return root
     }
 
+    /** Settings uses its own plain section label style. */
     override fun sectionTitle(title: String): TextView {
         return TextView(this).apply {
             text = title
@@ -187,6 +208,7 @@ class SettingsActivity : BaseActivity() {
         }
     }
 
+    /** Simple rounded info card with a title and description. */
     private fun cardView(
         title: String,
         description: String

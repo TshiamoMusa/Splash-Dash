@@ -1,151 +1,192 @@
 package com.example.splashanddash
 
-import android.app.AlertDialog
 import android.os.Bundle
-import android.widget.ArrayAdapter
+import android.text.InputType
+import android.view.View
 import android.widget.LinearLayout
-import android.widget.Spinner
+import androidx.appcompat.app.AlertDialog
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 
+/** Checkout: pay for a pending booking online, by EFT or with cash. */
 class PaymentActivity : BaseActivity() {
 
-    private lateinit var mainLayout: LinearLayout
+    // Holds the loading text / payment form; cleared and refilled on every load
+    private lateinit var body: LinearLayout
+    private var isPaying = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         val screen = content()
-        mainLayout = column()
+        val main = column()
 
-        mainLayout.addView(sectionTitle("Secure Checkout", "Encrypted payment gateway for your booking"))
+        // (The old in-page back link was removed: the header has a back arrow now.)
+        main.addView(pageHeader("Checkout", "Pay for a pending booking"))
 
-        if (ApiClient.getToken(this).isNullOrBlank()) {
-            showLoginRequired()
-            screen.addView(mainLayout)
-            setContentView(screen)
-            return
-        }
+        body = column(0)
+        main.addView(body)
 
-        fetchBookings()
+        main.addView(footer())
 
-        screen.addView(mainLayout)
-        setContentView(screen)
+        screen.addView(main)
+
+        // Fixed header (back arrow) + scrolling content
+        showScreen(screen)
     }
 
+    /** Reload every time the screen comes back so the pending list is current. */
+    override fun onResume() {
+        super.onResume()
+        if (!ApiClient.getToken(this).isNullOrBlank()) {
+            fetchBookings()
+        }
+    }
+
+    /** Loads the customer's bookings and keeps only the ones waiting for payment. */
     private fun fetchBookings() {
+        body.removeAllViews()
+        body.addView(text("Loading your bookings…", 15f, false, muted))
+
         lifecycleScope.launch {
             val result = ApiClient.getCustomerBookings(this@PaymentActivity)
+            if (isFinishing || isDestroyed) return@launch
 
-            runOnUiThread {
-                if (isFinishing || isDestroyed) return@runOnUiThread
+            body.removeAllViews()
 
-                if (result.isSuccess) {
-                    val bookings = result.getOrNull() ?: emptyList()
-                    val pendingBookings = bookings.filter { it.bookingStatus.equals("Pending", ignoreCase = true) }
+            // Error state with a retry button
+            if (result.isFailure) {
+                body.addView(
+                    text(result.exceptionOrNull()?.message ?: "Could not load your bookings.", 15f, false, danger)
+                )
+                body.addView(outlineButton("Retry") { fetchBookings() })
+                return@launch
+            }
 
-                    if (pendingBookings.isEmpty()) {
-                        mainLayout.removeAllViews()
-                        mainLayout.addView(sectionTitle("Secure Checkout", "Payment Gateway"))
-                        mainLayout.addView(card("No Pending Bookings", "You have no pending bookings requiring payment."))
-                        mainLayout.addView(button("BOOK A SERVICE") { go(BookingActivity::class.java) })
-                        mainLayout.addView(outlineButton("BACK TO DASHBOARD") { go(CustomerDashboardActivity::class.java); finish() })
-                    } else {
-                        renderPaymentUI(pendingBookings)
-                    }
-                } else {
-                    showAppMessage("Error loading bookings: ${result.exceptionOrNull()?.message}")
-                }
+            val pending = (result.getOrNull() ?: emptyList())
+                .filter { it.bookingStatus.equals("Pending", ignoreCase = true) }
+
+            if (pending.isEmpty()) {
+                // Nothing to pay
+                body.addView(
+                    card(
+                        "Nothing to pay",
+                        "You have no pending bookings. Book a wash and it will appear here.",
+                        "Book now"
+                    ) { go(BookingActivity::class.java) }
+                )
+            } else {
+                renderPaymentForm(pending)
             }
         }
     }
 
-    private fun renderPaymentUI(bookings: List<BookingItem>) {
-        mainLayout.removeAllViews()
-        mainLayout.addView(sectionTitle("Secure Checkout", "Complete your car wash payment"))
+    /** Builds the booking picker, payment method chips, card fields and Pay button. */
+    private fun renderPaymentForm(bookings: List<BookingItem>) {
 
-        mainLayout.addView(text("Select Booking", 18f, true))
-        val bookingNames = bookings.map { "Booking #${it.bookingId} — ${it.service} — R${it.totalAmount}" }
-        val bookingSpinner = Spinner(this)
-        bookingSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, bookingNames)
-        mainLayout.addView(bookingSpinner)
+        // BOOKING
+        body.addView(sectionTitle("Booking"))
+        val bookingLabels = bookings.map {
+            "${it.service}  ·  ${ApiClient.displayDate(it.bookingDateTime)}  ·  ${money(it.totalAmount)}"
+        }
+        val bookingGroup = choiceGroup(bookingLabels, 1)
+        body.addView(bookingGroup.view)
 
-        mainLayout.addView(text("Payment Method", 18f, true))
-        val paymentMethodSpinner = Spinner(this)
-        // Must match PostgreSQL chk_payment_method constraint: 'Cash', 'EFT', 'PayFast'
-        paymentMethodSpinner.adapter = ArrayAdapter(
-            this,
-            android.R.layout.simple_spinner_dropdown_item,
-            arrayOf("PayFast", "EFT", "Cash")
-        )
-        mainLayout.addView(paymentMethodSpinner)
+        // PAYMENT METHOD (values must match the API: PayFast, EFT, Cash)
+        body.addView(sectionTitle("Payment method"))
+        val methodLabels = listOf("Pay online", "EFT", "Cash")
+        val methodValues = listOf("PayFast", "EFT", "Cash")
 
-        mainLayout.addView(text("Cardholder Name / Account Name", 16f, true))
-        val cardNameInput = input("John Doe")
-        mainLayout.addView(cardNameInput)
+        val cardFields = column(0)
 
-        mainLayout.addView(text("Card Number / Reference", 16f, true))
-        val cardNumberInput = input("4532 8920 1192 4810")
-        cardNumberInput.inputType = android.text.InputType.TYPE_CLASS_NUMBER
-        mainLayout.addView(cardNumberInput)
+        // Card fields are only shown for "Pay online" (index 0)
+        val methodGroup = choiceGroup(methodLabels, 3) { index ->
+            cardFields.visibility = if (index == 0) View.VISIBLE else View.GONE
+        }
+        body.addView(methodGroup.view)
 
-        mainLayout.addView(text("Expiration Date (MM/YY)", 16f, true))
-        val expiryInput = input("08/28")
-        mainLayout.addView(expiryInput)
+        // Card details are only needed for online payment.
+        val cardName = input("Name on card")
+        val cardNumber = input("Card number")
+        cardNumber.inputType = InputType.TYPE_CLASS_NUMBER
+        val cardExpiry = input("Expiry (MM/YY)")
+        val cardCvv = input("CVV")
+        cardCvv.inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
 
-        mainLayout.addView(text("CVV / Security Code", 16f, true))
-        val cvvInput = input("123")
-        cvvInput.inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
-        mainLayout.addView(cvvInput)
+        cardFields.addView(cardName)
+        cardFields.addView(cardNumber)
+        cardFields.addView(cardExpiry)
+        cardFields.addView(cardCvv)
+        body.addView(cardFields)
 
-        mainLayout.addView(button("PAY NOW (SECURE)") {
-            val pos = bookingSpinner.selectedItemPosition
-            val method = paymentMethodSpinner.selectedItem.toString()
-            val cardName = cardNameInput.text.toString().trim()
-            val cardNumber = cardNumberInput.text.toString().trim()
+        addSpacing(body, 8)
 
-            when {
-                cardName.isBlank() -> showAppMessage("Please enter the name.")
-                cardNumber.length < 4 -> showAppMessage("Please enter valid payment reference or card number.")
-                else -> {
-                    val selectedBooking = bookings.getOrNull(pos)
-                    if (selectedBooking != null) {
-                        lifecycleScope.launch {
-                            val payResult = ApiClient.makePayment(
-                                context = this@PaymentActivity,
-                                bookingId = selectedBooking.bookingId,
-                                paymentMethod = method
-                            )
+        body.addView(
+            button("Pay now") {
+                if (isPaying) return@button
 
-                            runOnUiThread {
-                                if (payResult.isSuccess) {
-                                    val resObj = payResult.getOrNull()
-                                    val refNum = resObj?.optString("referenceNumber", "SD-PAY-9821") ?: "SD-PAY-9821"
-                                    val txId = resObj?.optString("transactionId", "TXN-884102") ?: "TXN-884102"
+                val selected = bookings.getOrNull(bookingGroup.index) ?: return@button
+                val method = methodValues[methodGroup.index]
 
-                                    AlertDialog.Builder(this@PaymentActivity)
-                                        .setTitle("Payment Successful 💳")
-                                        .setMessage("Your payment of R${selectedBooking.totalAmount} was processed securely via $method.\n\nReference: $refNum\nTransaction ID: $txId\nStatus: Confirmed")
-                                        .setPositiveButton("VIEW MY BOOKINGS") { _, _ ->
-                                            go(BookingHistoryActivity::class.java)
-                                            finish()
-                                        }.show()
-                                } else {
-                                    showAppMessage(payResult.exceptionOrNull()?.message ?: "Payment processing failed.")
-                                }
-                            }
-                        }
+                // Validate the card details only for online payment
+                if (methodGroup.index == 0) {
+                    val digits = cardNumber.text.toString().filter { it.isDigit() }
+                    val expiryOk = Regex("^(0[1-9]|1[0-2])/\\d{2}$")
+                        .matches(cardExpiry.text.toString().trim())
+                    val cvv = cardCvv.text.toString().trim()
+
+                    val problem = when {
+                        cardName.text.toString().isBlank() -> "Please enter the name on the card."
+                        digits.length !in 13..19 -> "Please enter a valid card number."
+                        !expiryOk -> "Enter the expiry date as MM/YY."
+                        cvv.length !in 3..4 -> "Please enter the CVV."
+                        else -> null
+                    }
+
+                    if (problem != null) {
+                        showAppMessage(problem)
+                        return@button
                     }
                 }
-            }
-        })
 
-        mainLayout.addView(outlineButton("BACK TO DASHBOARD") { go(CustomerDashboardActivity::class.java); finish() })
-        mainLayout.addView(footer())
+                pay(selected, method)
+            }
+        )
     }
 
-    private fun showLoginRequired() {
-        mainLayout.addView(card("Sign In Required", "Please sign in to access secure checkout."))
-        mainLayout.addView(button("LOGIN") { go(LoginActivity::class.java); finish() })
+    /** Sends the payment to the API and shows the receipt details. */
+    private fun pay(booking: BookingItem, method: String) {
+        isPaying = true
+
+        lifecycleScope.launch {
+            val result = ApiClient.makePayment(this@PaymentActivity, booking.bookingId, method)
+
+            isPaying = false
+            if (isFinishing || isDestroyed) return@launch
+
+            if (result.isFailure) {
+                showAppMessage(result.exceptionOrNull()?.message ?: "Payment failed.")
+                return@launch
+            }
+
+            // Receipt details returned by the API
+            val json = result.getOrNull()
+            val reference = json?.optString("referenceNumber", "") ?: ""
+            val transaction = json?.optString("transactionId", "") ?: ""
+
+            AlertDialog.Builder(this@PaymentActivity)
+                .setTitle("Payment received")
+                .setMessage(
+                    "${money(booking.totalAmount)} for your ${booking.service} booking.\n\n" +
+                            "Reference: $reference\nTransaction: $transaction\n\n" +
+                            "Your booking is now confirmed."
+                )
+                .setCancelable(false)
+                .setPositiveButton("My bookings") { _, _ ->
+                    go(BookingHistoryActivity::class.java)
+                    finish()
+                }
+                .show()
+        }
     }
 }

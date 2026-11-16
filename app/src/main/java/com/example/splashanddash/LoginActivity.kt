@@ -2,20 +2,21 @@ package com.example.splashanddash
 
 import android.content.Intent
 import android.os.Bundle
-import android.util.Log
-import android.util.Patterns
+import android.view.Gravity
 import android.widget.ImageView
 import android.widget.LinearLayout
 import androidx.lifecycle.lifecycleScope
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.launch
 
+/**
+ * Login screen of the customer app.
+ * Supports email/password login through the API and Google Sign-In
+ * (Firebase Auth, then synced to the API).
+ */
 class LoginActivity : BaseActivity() {
 
-    companion object {
-        private const val TAG = "SplashDashLogin"
-    }
-
+    // Guards against double taps while a login is running / after success.
     private var isLoggingIn = false
     private var hasNavigated = false
 
@@ -30,48 +31,42 @@ class LoginActivity : BaseActivity() {
             setImageResource(R.drawable.splash_dash_logo)
             scaleType = ImageView.ScaleType.CENTER_INSIDE
         }
-
-        main.addView(
-            logo,
-            LinearLayout.LayoutParams(-1, dp(140))
-        )
+        main.addView(logo, LinearLayout.LayoutParams(-1, dp(140)))
 
         main.addView(
             sectionTitle(
-                "Welcome Back",
-                "Sign in to your SplashDash account"
+                "Welcome back",
+                "Sign in to your Splash & Dash account"
             )
         )
 
         // LOGIN FIELDS
-        val email = input("Email or Username")
-
+        val email = input("Email address")
         email.inputType =
             android.text.InputType.TYPE_CLASS_TEXT or
                     android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
 
         val password = input("Password")
-
         password.inputType =
             android.text.InputType.TYPE_CLASS_TEXT or
                     android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
 
         main.addView(email)
         main.addView(password)
+        addSpacing(main, 4)
 
         // EMAIL AND PASSWORD LOGIN
         main.addView(
-            button("LOGIN") {
+            button("Log in") {
 
-                if (isLoggingIn || hasNavigated) {
-                    return@button
-                }
+                if (isLoggingIn || hasNavigated) return@button
 
                 val identifier = email.text.toString().trim()
                 val userPassword = password.text.toString()
 
+                // Basic validation before calling the API
                 if (identifier.isBlank()) {
-                    showMessage("Enter your email or username.")
+                    showMessage("Enter your email address.")
                     return@button
                 }
 
@@ -90,39 +85,39 @@ class LoginActivity : BaseActivity() {
                         if (result.isSuccess) {
                             openDashboard()
                         } else {
-                            showMessage("Login failed: ${result.exceptionOrNull()?.message ?: "Unknown error"}")
+                            showMessage(
+                                "Login failed: ${result.exceptionOrNull()?.message ?: "Unknown error"}"
+                            )
                         }
                     }
                 }
             }
         )
 
+        addSpacing(main, 8)
+
         main.addView(
-            text("OR", 16f, true)
+            text("or", 14f, false, muted).apply { gravity = Gravity.CENTER }
         )
 
-        // GOOGLE SIGN-IN
-        main.addView(
-            outlineButton("CONTINUE WITH GOOGLE") {
+        addSpacing(main, 8)
 
-                if (isLoggingIn || hasNavigated) {
-                    return@outlineButton
-                }
+        // GOOGLE SIGN-IN (Firebase first, then synced to our API)
+        main.addView(
+            outlineButton("Continue with Google") {
+
+                if (isLoggingIn || hasNavigated) return@outlineButton
 
                 isLoggingIn = true
 
                 lifecycleScope.launch {
-
                     try {
-
-                        GoogleSignInManager.signIn(
-                            this@LoginActivity
-                        ) { success, message ->
-
+                        GoogleSignInManager.signIn(this@LoginActivity) { success, message ->
                             runOnUiThread {
                                 if (success) {
                                     val user = FirebaseAuth.getInstance().currentUser
                                     if (user != null) {
+                                        // Tell our API about the Google user so it issues a token.
                                         lifecycleScope.launch {
                                             val apiResult = ApiClient.googleLogin(
                                                 this@LoginActivity,
@@ -135,7 +130,10 @@ class LoginActivity : BaseActivity() {
                                                 if (apiResult.isSuccess) {
                                                     openDashboard()
                                                 } else {
-                                                    showMessage(apiResult.exceptionOrNull()?.message ?: "Google login sync failed.")
+                                                    showMessage(
+                                                        apiResult.exceptionOrNull()?.message
+                                                            ?: "Google login sync failed."
+                                                    )
                                                 }
                                             }
                                         }
@@ -149,7 +147,6 @@ class LoginActivity : BaseActivity() {
                                 }
                             }
                         }
-
                     } catch (e: Exception) {
                         isLoggingIn = false
                         showMessage(e.localizedMessage ?: "Google Sign-In failed.")
@@ -158,54 +155,37 @@ class LoginActivity : BaseActivity() {
             }
         )
 
+        addSpacing(main, 12)
+
         // REGISTRATION
         main.addView(
-            outlineButton("CREATE ACCOUNT") {
-
-                if (!isLoggingIn) {
-                    go(RegisterActivity::class.java)
-                }
+            outlineButton("Create account") {
+                if (!isLoggingIn) go(RegisterActivity::class.java)
             }
         )
 
-        // BACK TO HOME
-        main.addView(
-            outlineButton("BACK TO HOME") {
-
-                if (!isLoggingIn) {
-                    go(MainActivity::class.java)
-                }
-            }
-        )
+        // The old "Back to home" button was removed: the header has a back arrow now.
 
         main.addView(footer())
 
         screen.addView(main)
-        setContentView(screen)
+
+        // Fixed header (back arrow) + scrolling content
+        showScreen(screen)
     }
 
+    /** The app is customer-only, so every successful login lands on the customer dashboard. */
     private fun openDashboard() {
         if (hasNavigated) return
         hasNavigated = true
 
-        val role = AppData.role
-        val destination = when (role) {
-            "Admin" -> AdminDashboardActivity::class.java
-            "Staff" -> StaffDashboardActivity::class.java
-            else -> CustomerDashboardActivity::class.java
-        }
-
-        val intent = Intent(this, destination)
-        startActivity(intent)
+        startActivity(Intent(this, CustomerDashboardActivity::class.java))
         finish()
     }
 
+    /** Shows a dialog, but only if the screen is still alive. */
     private fun showMessage(message: String) {
         if (isFinishing || isDestroyed) return
-        android.app.AlertDialog.Builder(this)
-            .setTitle("SplashDash")
-            .setMessage(message)
-            .setPositiveButton("OK", null)
-            .show()
+        showAppMessage(message)
     }
 }

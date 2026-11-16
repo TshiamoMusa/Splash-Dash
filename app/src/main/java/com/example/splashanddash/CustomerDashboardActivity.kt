@@ -1,211 +1,87 @@
 package com.example.splashanddash
 
 import android.os.Bundle
+import android.view.View
+import android.widget.Button
 import android.widget.LinearLayout
+import android.widget.TextView
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 
+/**
+ * Landing page for a logged-in customer: live booking stats and quick actions.
+ * No back arrow here (it is the landing page); Settings shows in the header.
+ */
 class CustomerDashboardActivity : BaseActivity() {
+
+    // Stat tiles and error widgets, updated once the bookings load
+    private lateinit var totalTile: LinearLayout
+    private lateinit var activeTile: LinearLayout
+    private lateinit var completedTile: LinearLayout
+    private lateinit var errorText: TextView
+    private lateinit var retryButton: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        android.util.Log.d(
-            "SplashDashDashboard",
-            "Customer Dashboard onCreate called"
-        )
-
-        if (ApiClient.getToken(this).isNullOrBlank()) {
-            go(LoginActivity::class.java)
-            finish()
-            return
-        }
-
-        showDashboard(
-            total = null,
-            pending = null,
-            completed = null
-        )
-    }
-
-    override fun onResume() {
-        super.onResume()
-
-        if (!ApiClient.getToken(this).isNullOrBlank()) {
-            loadDashboardStatistics()
-        }
-    }
-
-    private fun loadDashboardStatistics() {
-        lifecycleScope.launch {
-            val result = ApiClient.getCustomerBookings(this@CustomerDashboardActivity)
-
-            runOnUiThread {
-                if (isFinishing || isDestroyed) return@runOnUiThread
-
-                if (result.isSuccess) {
-                    val bookings = result.getOrNull() ?: emptyList()
-                    val totalBookings = bookings.size
-                    val pendingBookings = bookings.count { it.bookingStatus.equals("Pending", ignoreCase = true) || it.bookingStatus.equals("Confirmed", ignoreCase = true) }
-                    val completedBookings = bookings.count { it.bookingStatus.equals("Completed", ignoreCase = true) }
-
-                    showDashboard(
-                        total = totalBookings,
-                        pending = pendingBookings,
-                        completed = completedBookings
-                    )
-                } else {
-                    showDashboard(
-                        total = null,
-                        pending = null,
-                        completed = null,
-                        error = result.exceptionOrNull()?.message ?: "Could not load stats"
-                    )
-                }
-            }
-        }
-    }
-
-    private fun showDashboard(
-        total: Int?,
-        pending: Int?,
-        completed: Int?,
-        error: String? = null
-    ) {
 
         val screen = content()
         val main = column()
 
-        val customerName = AppData.currentUser
+        // (The header is added by showScreen() below, so it stays fixed at the top.)
+
+        // Greeting uses the first name only
+        val firstName = AppData.currentUser
             .takeIf { it.isNotBlank() && it != "Guest" }
-            ?: "Valued Customer"
+            ?.substringBefore(" ")
+            ?: "there"
 
-        // STYLISH HEADER BANNER
-        main.addView(
-            sectionTitle(
-                "🚗 SplashDash Member Portal",
-                "Welcome back, $customerName!\nProfessional car wash & detailing services."
-            )
-        )
+        main.addView(pageHeader("Hi, $firstName", "What would you like to do today?"))
 
-        // LIVE STATS SECTION
-        main.addView(
-            text(
-                "📊 Live Account Metrics",
-                20f,
-                true
-            )
-        )
+        // Stats (filled in once the bookings load)
+        totalTile = metricCardValueLabel("…", "Total")
+        activeTile = metricCardValueLabel("…", "Active")
+        completedTile = metricCardValueLabel("…", "Completed")
+        main.addView(metricRow(totalTile, activeTile, completedTile))
 
-        val totalText = total?.toString() ?: "..."
-        val pendingText = pending?.toString() ?: "..."
-        val completedText = completed?.toString() ?: "..."
+        // Error message and retry button (hidden until a load fails)
+        errorText = text("", 14f, false, danger).apply { visibility = View.GONE }
+        retryButton = outlineButton("Retry") { loadStats() }.apply { visibility = View.GONE }
+        main.addView(errorText)
+        main.addView(retryButton)
+
+        // Quick actions
+        main.addView(sectionTitle("Quick actions"))
 
         main.addView(
             card(
-                "📁 Total Bookings",
-                "You have made $totalText total bookings with us."
-            )
+                "Book a car wash",
+                "Pick your vehicle, service, date and time.",
+                "Book now"
+            ) { go(BookingActivity::class.java) }
         )
 
         main.addView(
             card(
-                "⏳ Active / Pending Bookings",
-                "$pendingText bookings currently awaiting service or confirmation."
-            )
+                "My bookings",
+                "View, edit or cancel your bookings.",
+                "View"
+            ) { go(BookingHistoryActivity::class.java) }
         )
 
         main.addView(
             card(
-                "✨ Completed Washes",
-                "$completedText vehicles successfully washed and detailed."
-            )
+                "Checkout",
+                "Pay for a pending booking online, by EFT or with cash.",
+                "Pay"
+            ) { go(PaymentActivity::class.java) }
         )
 
-        if (error != null) {
-            main.addView(
-                text(
-                    "⚠️ Database Sync Notice: $error",
-                    14f
-                )
-            )
+        addSpacing(main, 4)
 
-            main.addView(
-                outlineButton("🔄 RETRY SYNC") {
-                    loadDashboardStatistics()
-                }
-            )
-        }
-
-        // STYLISH QUICK ACTIONS
+        // Log out: clear the saved token and return to Login
         main.addView(
-            sectionTitle(
-                "⚡ Quick Actions",
-                "Schedule, manage, and pay for services in seconds"
-            )
-        )
-
-        main.addView(
-            card(
-                "✨ Book a New Service",
-                "Choose from our premium Exterior, Interior, or Full Detail car wash packages."
-            )
-        )
-
-        main.addView(
-            button("📅 BOOK A CAR WASH NOW") {
-                go(BookingActivity::class.java)
-            }
-        )
-
-        main.addView(
-            card(
-                "📝 Manage Bookings (Edit & Cancel)",
-                "View your history, update vehicle/date details on pending bookings, or cancel anytime."
-            )
-        )
-
-        main.addView(
-            button("🔍 VIEW & EDIT MY BOOKINGS") {
-                go(BookingHistoryActivity::class.java)
-            }
-        )
-
-        main.addView(
-            card(
-                "💳 Secure Checkout",
-                "Complete encrypted payments via PayFast, EFT, or Cash for pending bookings."
-            )
-        )
-
-        main.addView(
-            button("🔒 PROCEED TO SECURE CHECKOUT") {
-                go(PaymentActivity::class.java)
-            }
-        )
-
-        main.addView(
-            card(
-                "⚙️ Account & Profile Settings",
-                "Update your home address, phone number, and account preferences."
-            )
-        )
-
-        main.addView(
-            outlineButton("SETTINGS & PROFILE") {
-                go(SettingsActivity::class.java)
-            }
-        )
-
-        main.addView(
-            outlineButton("🔄 REFRESH DASHBOARD") {
-                loadDashboardStatistics()
-            }
-        )
-
-        main.addView(
-            outlineButton("🚪 LOG OUT") {
+            outlineButton("Log out") {
                 ApiClient.clearSession(this@CustomerDashboardActivity)
-
                 go(LoginActivity::class.java)
                 finish()
             }
@@ -214,6 +90,52 @@ class CustomerDashboardActivity : BaseActivity() {
         main.addView(footer())
 
         screen.addView(main)
-        setContentView(screen)
+
+        // Fixed header (Settings, no back arrow) + scrolling content
+        showScreen(screen)
+    }
+
+    /** Refresh the stats every time the dashboard becomes visible. */
+    override fun onResume() {
+        super.onResume()
+        if (!ApiClient.getToken(this).isNullOrBlank()) {
+            loadStats()
+        }
+    }
+
+    /** Writes a number into a stat tile (child 0 is the big number). */
+    private fun setTile(tile: LinearLayout, value: String) {
+        (tile.getChildAt(0) as TextView).text = value
+    }
+
+    /** Loads the bookings and fills the Total / Active / Completed tiles. */
+    private fun loadStats() {
+        errorText.visibility = View.GONE
+        retryButton.visibility = View.GONE
+
+        lifecycleScope.launch {
+            val result = ApiClient.getCustomerBookings(this@CustomerDashboardActivity)
+            if (isFinishing || isDestroyed) return@launch
+
+            result.onSuccess { bookings ->
+                setTile(totalTile, bookings.size.toString())
+                // "Active" = pending or confirmed
+                setTile(
+                    activeTile,
+                    bookings.count {
+                        it.bookingStatus.equals("Pending", ignoreCase = true) ||
+                                it.bookingStatus.equals("Confirmed", ignoreCase = true)
+                    }.toString()
+                )
+                setTile(
+                    completedTile,
+                    bookings.count { it.bookingStatus.equals("Completed", ignoreCase = true) }.toString()
+                )
+            }.onFailure { error ->
+                errorText.text = error.message ?: "Could not load your stats."
+                errorText.visibility = View.VISIBLE
+                retryButton.visibility = View.VISIBLE
+            }
+        }
     }
 }

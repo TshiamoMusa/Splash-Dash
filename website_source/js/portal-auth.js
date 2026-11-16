@@ -9,7 +9,7 @@
     "use strict";
 
     // Public address of the deployed API.
-    var API_BASE = "https://splash-dash-api.onrender.com/api";
+   var API_BASE = "https://splash-dash-api-vxly.onrender.com/api";
 
     // Free-tier hosts put idle servers to sleep; the first request can take
     // 30-60 seconds while the server starts. Allow for that before giving up.

@@ -1,7 +1,6 @@
 package com.example.splashanddash
 
 import android.graphics.Color
-import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.view.Gravity
@@ -24,17 +23,31 @@ class MainActivity : BaseActivity() {
         // -------------------------------------------------
         // HEADER
         // -------------------------------------------------
+        // Shared gradient header. It has no Settings button here;
+        // Settings now lives on the customer dashboard only.
 
         val header = navBar(
             "Splash & Dash",
             "Professional vehicle cleaning services"
         )
 
-        root.addView(header)
+        root.addView(
+            header,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                // Same margins as other screens so the header floats like a card.
+                setMargins(dp(12), dp(8), dp(12), dp(4))
+            }
+        )
 
         // -------------------------------------------------
         // NAVIGATION
         // -------------------------------------------------
+        // Blends with the header: same side margins, same rounded corners,
+        // and theme colours (so it also follows dark mode).
+        // No "Home" link because this screen IS home.
 
         val nav = LinearLayout(this).apply {
 
@@ -45,25 +58,25 @@ class MainActivity : BaseActivity() {
 
             setPadding(
                 dp(8),
-                dp(4),
+                dp(2),
                 dp(8),
-                dp(4)
+                dp(2)
             )
 
-            setBackgroundColor(
-                Color.rgb(
-                    8,
-                    42,
-                    68
-                )
+            background = rounded(
+                surfaceAlt,
+                18,
+                if (isDark) border else null
             )
         }
 
+        // Signed-in customers see "Dashboard" instead of "Login".
+        val lastLink = if (isSignedIn()) "Dashboard" else "Login"
+
         listOf(
-            "Home",
             "Gallery",
             "Contact",
-            "Login"
+            lastLink
         ).forEach { label ->
 
             val item =
@@ -74,12 +87,13 @@ class MainActivity : BaseActivity() {
                     textSize = 14f
 
                     typeface =
-                        Typeface.create(
+                        android.graphics.Typeface.create(
                             "sans",
-                            Typeface.BOLD
+                            android.graphics.Typeface.BOLD
                         )
 
-                    setTextColor(Color.WHITE)
+                    // Theme-aware colour instead of white on a dark strip.
+                    setTextColor(accent)
 
                     gravity =
                         Gravity.CENTER
@@ -90,6 +104,9 @@ class MainActivity : BaseActivity() {
                         dp(12),
                         dp(12)
                     )
+
+                    isClickable = true
+                    isFocusable = true
 
                     setOnClickListener {
 
@@ -109,6 +126,11 @@ class MainActivity : BaseActivity() {
                                 go(
                                     LoginActivity::class.java
                                 )
+
+                            "Dashboard" ->
+                                go(
+                                    CustomerDashboardActivity::class.java
+                                )
                         }
                     }
                 }
@@ -123,7 +145,15 @@ class MainActivity : BaseActivity() {
             )
         }
 
-        root.addView(nav)
+        root.addView(
+            nav,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                setMargins(dp(12), dp(4), dp(12), dp(4))
+            }
+        )
 
         // -------------------------------------------------
         // SCROLL CONTENT

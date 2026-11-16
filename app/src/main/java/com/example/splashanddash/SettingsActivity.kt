@@ -5,7 +5,7 @@ import android.os.Bundle
 import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatDelegate
-import com.google.android.material.switchmaterial.SwitchMaterial
+import androidx.appcompat.widget.SwitchCompat
 
 class SettingsActivity : BaseActivity() {
 
@@ -15,15 +15,33 @@ class SettingsActivity : BaseActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
         setContentView(createSettingsScreen())
+    }
+
+    // Safely reads and migrates older saved preferences.
+    private fun getBooleanPreference(key: String, defaultValue: Boolean): Boolean {
+        val savedValue = settingsPrefs.all[key]
+
+        val value = when (savedValue) {
+            is Boolean -> savedValue
+            is Int -> savedValue != 0
+            is Long -> savedValue != 0L
+            is String -> savedValue.toBooleanStrictOrNull() ?: defaultValue
+            else -> defaultValue
+        }
+
+        if (savedValue != null && savedValue !is Boolean) {
+            settingsPrefs.edit()
+                .putBoolean(key, value)
+                .apply()
+        }
+
+        return value
     }
 
     private fun createSettingsScreen(): LinearLayout {
 
         val root = createScreen()
-
-        // Add the shared navigation bar.
         root.addView(navBar())
 
         val scroll = content()
@@ -36,7 +54,7 @@ class SettingsActivity : BaseActivity() {
             )
         )
 
-        // My Profile opens the separate ProfileActivity.
+        // My Profile
         page.addView(
             createSettingsCard(
                 "My Profile",
@@ -46,21 +64,7 @@ class SettingsActivity : BaseActivity() {
             }
         )
 
-        // Password management entry.
-        page.addView(
-            createSettingsCard(
-                "Change Password",
-                "Manage your account password."
-            ) {
-                Toast.makeText(
-                    this,
-                    "Password management is not connected yet.",
-                    Toast.LENGTH_LONG
-                ).show()
-            }
-        )
-
-        // Application information.
+        // Application information
         page.addView(
             createSettingsCard(
                 "About Splash & Dash",
@@ -70,18 +74,17 @@ class SettingsActivity : BaseActivity() {
             }
         )
 
+        // Appearance
         page.addView(sectionTitle("Appearance"))
 
         val appearanceCard = card()
 
-        val darkModeSwitch = SwitchMaterial(this).apply {
+        val darkModeSwitch = SwitchCompat(this).apply {
             text = "Dark Mode"
-            isChecked = settingsPrefs.getBoolean("theme", false)
+            isChecked = getBooleanPreference("theme", false)
             setTextColor(textColor)
 
             setOnCheckedChangeListener { _, enabled ->
-
-                // Save the selected theme.
                 settingsPrefs.edit()
                     .putBoolean("theme", enabled)
                     .apply()
@@ -99,18 +102,17 @@ class SettingsActivity : BaseActivity() {
         appearanceCard.addView(darkModeSwitch)
         page.addView(appearanceCard)
 
+        // Notifications
         page.addView(sectionTitle("Notifications"))
 
         val notificationCard = card()
 
-        val notificationSwitch = SwitchMaterial(this).apply {
+        val notificationSwitch = SwitchCompat(this).apply {
             text = "Enable Notifications"
-            isChecked = settingsPrefs.getBoolean("notifications", true)
+            isChecked = getBooleanPreference("notifications", true)
             setTextColor(textColor)
 
             setOnCheckedChangeListener { _, enabled ->
-
-                // Save the notification preference locally.
                 settingsPrefs.edit()
                     .putBoolean("notifications", enabled)
                     .apply()
@@ -120,9 +122,9 @@ class SettingsActivity : BaseActivity() {
         notificationCard.addView(notificationSwitch)
         page.addView(notificationCard)
 
+        // Preferences
         page.addView(sectionTitle("Preferences"))
 
-        // Reset saved app preferences.
         page.addView(
             primaryButton("Reset Preferences").apply {
                 setOnClickListener {
@@ -172,6 +174,9 @@ class SettingsActivity : BaseActivity() {
 
         option.addView(titleView)
         option.addView(descriptionView)
+
+        option.isClickable = true
+        option.isFocusable = true
 
         option.setOnClickListener {
             action()

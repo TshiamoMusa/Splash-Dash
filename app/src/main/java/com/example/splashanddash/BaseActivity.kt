@@ -84,8 +84,18 @@ open class BaseActivity : AppCompatActivity() {
     // Activity setup
     // ---------------------------------------------------------
 
+    /**
+     * Remembers whether the user was signed in when this screen was built.
+     * The header bar (Settings button) is drawn once, so if the login state
+     * changes while this screen sits in the background (user logs in or out
+     * on another screen) we rebuild the screen in onResume.
+     */
+    private var signedInWhenBuilt = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        signedInWhenBuilt = isSignedIn()
 
         // System bars blend into the screen, icons flip for light/dark.
         window.statusBarColor = backgroundColor
@@ -110,19 +120,31 @@ open class BaseActivity : AppCompatActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+
+        // If the login state changed since this screen was drawn, redraw it so the
+        // Settings button appears (after login) or disappears (after logout).
+        if (!isFinishing && isSignedIn() != signedInWhenBuilt) {
+            recreate()
+        }
+    }
+
     /** Screens that only a logged-in customer may open. */
     private fun requiresLogin(): Boolean {
         return this is CustomerDashboardActivity ||
                 this is BookingActivity ||
                 this is BookingHistoryActivity ||
-                this is PaymentActivity
+                this is PaymentActivity ||
+                this is SettingsActivity ||
+                this is ProfileActivity
     }
 
     /**
      * Email login and Google Sign-In both end with the API saving a JWT,
      * so a saved token means "signed in".
      */
-    private fun isSignedIn(): Boolean {
+    protected fun isSignedIn(): Boolean {
         return !ApiClient.getToken(this).isNullOrBlank()
     }
 
@@ -199,12 +221,15 @@ open class BaseActivity : AppCompatActivity() {
     /**
      * The shared header bar.
      *  - Back arrow: every page except Home and the dashboard (landing pages).
-     *  - Settings button: only when the user is logged in, and not on Settings itself.
+     *  - Settings button: ONLY on the customer dashboard, and only when logged in.
      */
     protected fun navBar(): LinearLayout {
 
         val showBack = this !is MainActivity && this !is CustomerDashboardActivity
-        val showSettings = isSignedIn() && this !is SettingsActivity
+
+        // Settings lives on the customer dashboard ONLY (and only when signed in).
+        // Every other screen, including Home, keeps a clean header.
+        val showSettings = isSignedIn() && this is CustomerDashboardActivity
 
         val navigation = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL

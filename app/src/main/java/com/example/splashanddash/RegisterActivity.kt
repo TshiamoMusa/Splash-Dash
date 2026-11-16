@@ -1,5 +1,6 @@
 package com.example.splashanddash
 
+import android.content.Intent
 import android.os.Bundle
 import android.text.InputFilter
 import android.text.InputType
@@ -111,8 +112,8 @@ class RegisterActivity : BaseActivity() {
                     fail(confirmPassword, "Passwords do not match.")
 
                 else -> {
+                    // lifecycleScope already runs on the main thread, so no runOnUiThread needed.
                     lifecycleScope.launch {
-                        // Same API call as before: first name and surname are now separate inputs.
                         val result = ApiClient.registerCustomer(
                             this@RegisterActivity,
                             firstName,
@@ -123,19 +124,16 @@ class RegisterActivity : BaseActivity() {
                             userPassword
                         )
 
-                        runOnUiThread {
-                            if (result.isSuccess) {
-                                // After OK, send the new customer to the Login screen.
-                                showMessage(
-                                    "Account created successfully! Please log in.",
-                                    "Registration successful"
-                                ) {
-                                    go(LoginActivity::class.java)
-                                    finish()
-                                }
-                            } else {
-                                showMessage(result.exceptionOrNull()?.message ?: "Registration failed.")
+                        if (result.isSuccess) {
+                            // After OK, return to the ORIGINAL Login screen.
+                            showMessage(
+                                "Account created successfully! Please log in.",
+                                "Registration successful"
+                            ) {
+                                backToLogin()
                             }
+                        } else {
+                            showMessage(result.exceptionOrNull()?.message ?: "Registration failed.")
                         }
                     }
                 }
@@ -146,9 +144,10 @@ class RegisterActivity : BaseActivity() {
 
         addSpacing(main, 12)
 
+        // Same behaviour as above: go back to the existing Login screen, not a new one.
         main.addView(
             outlineButton("Already have an account? Log in") {
-                go(LoginActivity::class.java)
+                backToLogin()
             }
         )
 
@@ -157,6 +156,20 @@ class RegisterActivity : BaseActivity() {
 
         // Fixed header (back arrow) + scrolling content
         showScreen(screen)
+    }
+
+    /**
+     * Returns to the Login screen without stacking a second copy of it.
+     * CLEAR_TOP + SINGLE_TOP: if Login is already open underneath this screen,
+     * Android brings that same Login back and closes everything above it.
+     * (If Login is not in the stack, a fresh one is opened.)
+     */
+    private fun backToLogin() {
+        val intent = Intent(this, LoginActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        }
+        startActivity(intent)
+        finish()
     }
 
     /** Blocks any typed or pasted character that is not a letter. */
@@ -182,6 +195,7 @@ class RegisterActivity : BaseActivity() {
         AlertDialog.Builder(this)
             .setTitle(title)
             .setMessage(message)
+            .setCancelable(false) // force the OK tap so we always navigate back
             .setPositiveButton("OK") { _, _ -> onOk?.invoke() }
             .show()
     }

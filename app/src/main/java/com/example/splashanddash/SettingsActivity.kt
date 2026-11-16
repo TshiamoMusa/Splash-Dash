@@ -1,247 +1,216 @@
+
 package com.example.splashanddash
 
 import android.os.Bundle
 import android.widget.LinearLayout
-import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatDelegate
-import com.google.android.material.switchmaterial.SwitchMaterial
+import androidx.appcompat.widget.SwitchCompat
 
-/** App preferences: dark mode, notifications and reset. Header shows a back arrow. */
 class SettingsActivity : BaseActivity() {
+
+    private val settingsPrefs by lazy {
+        getSharedPreferences("SplashDashSettings", MODE_PRIVATE)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        val root = createScreen()
-
-        setContentView(root)
+        setContentView(createSettingsScreen())
     }
 
-    override fun createScreen(): LinearLayout {
+    // Safely reads and migrates older saved preferences.
+    private fun getBooleanPreference(key: String, defaultValue: Boolean): Boolean {
+        val savedValue = settingsPrefs.all[key]
 
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setBackgroundColor(getColor(R.color.background))
-            setPadding(dp(20), dp(20), dp(20), dp(20))
+        val value = when (savedValue) {
+            is Boolean -> savedValue
+            is Int -> savedValue != 0
+            is Long -> savedValue != 0L
+            is String -> savedValue.toBooleanStrictOrNull() ?: defaultValue
+            else -> defaultValue
         }
 
-        // Shared header: back arrow, no Settings button (we are already here)
-        root.addView(
-            navBar(),
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { setMargins(0, 0, 0, dp(16)) }
-        )
-
-        // Title
-        val header = TextView(this).apply {
-            text = "Settings"
-            textSize = 28f
-            setTextColor(getColor(R.color.text))
-            typeface = android.graphics.Typeface.DEFAULT_BOLD
+        if (savedValue != null && savedValue !is Boolean) {
+            settingsPrefs.edit()
+                .putBoolean(key, value)
+                .apply()
         }
 
-        root.addView(
-            header,
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
+        return value
+    }
+
+    private fun createSettingsScreen(): LinearLayout {
+
+        val root = createScreen()
+        root.addView(navBar())
+
+        val scroll = content()
+        val page = column(20)
+
+        page.addView(
+            pageHeader(
+                "Settings",
+                "Manage your app preferences and account."
             )
         )
 
-        val subtitle = TextView(this).apply {
-            text = "Manage your SplashDash preferences"
-            textSize = 15f
-            setTextColor(getColor(R.color.muted))
-            setPadding(0, dp(6), 0, dp(20))
-        }
-
-        root.addView(subtitle)
-
-        // ---------------------------------------------------------
-        // APPEARANCE
-        // ---------------------------------------------------------
-        root.addView(
-            sectionTitle("Appearance")
+        // My Profile
+        page.addView(
+            createSettingsCard(
+                "My Profile",
+                "View your account details and update your home address."
+            ) {
+                go(ProfileActivity::class.java)
+            }
         )
 
-        val darkModeSwitch = SwitchMaterial(this).apply {
-            text = "Dark Mode"
-            textSize = 16f
-            setTextColor(getColor(R.color.text))
+        // Application information
+        page.addView(
+            createSettingsCard(
+                "About Splash & Dash",
+                "Application information."
+            ) {
+                showAbout()
+            }
+        )
 
-            isChecked =
-                AppCompatDelegate.getDefaultNightMode() ==
-                        AppCompatDelegate.MODE_NIGHT_YES
+        // Appearance
+        page.addView(sectionTitle("Appearance"))
+
+        val appearanceCard = card()
+
+        val darkModeSwitch = SwitchCompat(this).apply {
+            text = "Dark Mode"
+            isChecked = getBooleanPreference("theme", false)
+            setTextColor(textColor)
 
             setOnCheckedChangeListener { _, enabled ->
+                settingsPrefs.edit()
+                    .putBoolean("theme", enabled)
+                    .apply()
 
-                val mode =
+                AppCompatDelegate.setDefaultNightMode(
                     if (enabled) {
                         AppCompatDelegate.MODE_NIGHT_YES
                     } else {
                         AppCompatDelegate.MODE_NIGHT_NO
                     }
-
-                // Save the choice so SplashDashApplication can restore it on next launch
-                getSharedPreferences(
-                    "SplashDashSettings",
-                    MODE_PRIVATE
                 )
-                    .edit()
-                    .putInt("theme", mode)
-                    .apply()
-
-                AppCompatDelegate.setDefaultNightMode(mode)
             }
         }
 
-        root.addView(
-            darkModeSwitch,
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                setMargins(0, 0, 0, dp(20))
-            }
-        )
+        appearanceCard.addView(darkModeSwitch)
+        page.addView(appearanceCard)
 
-        // ---------------------------------------------------------
-        // NOTIFICATIONS
-        // ---------------------------------------------------------
-        root.addView(
-            sectionTitle("Notifications")
-        )
+        // Notifications
+        page.addView(sectionTitle("Notifications"))
 
-        val notificationSwitch = SwitchMaterial(this).apply {
+        val notificationCard = card()
+
+        val notificationSwitch = SwitchCompat(this).apply {
             text = "Enable Notifications"
-            textSize = 16f
-            setTextColor(getColor(R.color.text))
-
-            isChecked = getSharedPreferences(
-                "SplashDashSettings",
-                MODE_PRIVATE
-            ).getBoolean(
-                "notifications",
-                true
-            )
+            isChecked = getBooleanPreference("notifications", true)
+            setTextColor(textColor)
 
             setOnCheckedChangeListener { _, enabled ->
-
-                getSharedPreferences(
-                    "SplashDashSettings",
-                    MODE_PRIVATE
-                )
-                    .edit()
+                settingsPrefs.edit()
                     .putBoolean("notifications", enabled)
                     .apply()
             }
         }
 
-        root.addView(
-            notificationSwitch,
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                setMargins(0, 0, 0, dp(20))
+        notificationCard.addView(notificationSwitch)
+        page.addView(notificationCard)
+
+        // Preferences
+        page.addView(sectionTitle("Preferences"))
+
+        page.addView(
+            primaryButton("Reset Preferences").apply {
+                setOnClickListener {
+                    resetPreferences()
+                }
             }
         )
 
-        // ---------------------------------------------------------
-        // ABOUT
-        // ---------------------------------------------------------
-        root.addView(
-            sectionTitle("About")
-        )
+        page.addView(footer())
 
-        val aboutCard = cardView(
-            title = "SplashDash Car Wash",
-            description = "Car wash management system\nVersion 1.0"
-        )
+        scroll.addView(page)
 
         root.addView(
-            aboutCard,
+            scroll,
             LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                setMargins(0, 0, 0, dp(20))
-            }
+                0,
+                1f
+            )
         )
-
-        // ---------------------------------------------------------
-        // RESET
-        // ---------------------------------------------------------
-        val resetButton = primaryButton("Reset Preferences")
-
-        resetButton.setOnClickListener {
-
-            // Wipe saved preferences and go back to light mode
-            getSharedPreferences(
-                "SplashDashSettings",
-                MODE_PRIVATE
-            )
-                .edit()
-                .clear()
-                .apply()
-
-            AppCompatDelegate.setDefaultNightMode(
-                AppCompatDelegate.MODE_NIGHT_NO
-            )
-        }
-
-        root.addView(resetButton)
 
         return root
     }
 
-    /** Settings uses its own plain section label style. */
-    override fun sectionTitle(title: String): TextView {
-        return TextView(this).apply {
-            text = title
-            textSize = 14f
-            setTextColor(getColor(R.color.bright_blue))
-            typeface = android.graphics.Typeface.DEFAULT_BOLD
-            setPadding(0, dp(8), 0, dp(10))
-        }
-    }
-
-    /** Simple rounded info card with a title and description. */
-    private fun cardView(
+    // Creates a clickable settings option.
+    private fun createSettingsCard(
         title: String,
-        description: String
+        description: String,
+        action: () -> Unit
     ): LinearLayout {
 
-        val card = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(
-                dp(18),
-                dp(16),
-                dp(18),
-                dp(16)
-            )
-            setBackgroundResource(R.drawable.rounded_card)
+        val option = card()
+
+        val titleView = text(
+            title,
+            17f,
+            true,
+            textColor
+        )
+
+        val descriptionView = text(
+            description,
+            13f,
+            false,
+            muted
+        )
+
+        option.addView(titleView)
+        option.addView(descriptionView)
+
+        option.isClickable = true
+        option.isFocusable = true
+
+        option.setOnClickListener {
+            action()
         }
 
-        val titleView = TextView(this).apply {
-            text = title
-            textSize = 17f
-            setTextColor(getColor(R.color.text))
-            typeface = android.graphics.Typeface.DEFAULT_BOLD
-        }
+        return option
+    }
 
-        val descriptionView = TextView(this).apply {
-            text = description
-            textSize = 14f
-            setTextColor(getColor(R.color.muted))
-            setPadding(0, dp(5), 0, 0)
-        }
+    // Displays application information.
+    private fun showAbout() {
 
-        card.addView(titleView)
-        card.addView(descriptionView)
+        showAppMessage(
+            "Splash & Dash Car Wash\n\n" +
+                    "Version 1.0\n\n" +
+                    "Manage your car wash bookings and services.",
+            "About Splash & Dash"
+        )
+    }
 
-        return card
+    // Resets the saved app preferences.
+    private fun resetPreferences() {
+
+        settingsPrefs.edit().clear().apply()
+
+        AppCompatDelegate.setDefaultNightMode(
+            AppCompatDelegate.MODE_NIGHT_NO
+        )
+
+        Toast.makeText(
+            this,
+            "Preferences have been reset.",
+            Toast.LENGTH_SHORT
+        ).show()
+
+        recreate()
     }
 }

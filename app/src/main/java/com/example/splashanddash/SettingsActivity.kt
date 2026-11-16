@@ -1,10 +1,8 @@
 
 package com.example.splashanddash
 
-import android.content.Intent
 import android.os.Bundle
 import android.widget.LinearLayout
-import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatDelegate
 import com.google.android.material.switchmaterial.SwitchMaterial
@@ -31,38 +29,46 @@ class SettingsActivity : BaseActivity() {
         val scroll = content()
         val page = column(20)
 
-        page.addView(pageHeader(
-            "Settings",
-            "Manage your app preferences and account."
-        ))
+        page.addView(
+            pageHeader(
+                "Settings",
+                "Manage your app preferences and account."
+            )
+        )
 
         // My Profile opens the separate ProfileActivity.
-        page.addView(createSettingsCard(
-            "My Profile",
-            "View your account details and update your home address."
-        ) {
-            startActivity(Intent(this, ProfileActivity::class.java))
-        })
+        page.addView(
+            createSettingsCard(
+                "My Profile",
+                "View your account details and update your home address."
+            ) {
+                go(ProfileActivity::class.java)
+            }
+        )
 
         // Password management entry.
-        page.addView(createSettingsCard(
-            "Change Password",
-            "Manage your account password."
-        ) {
-            Toast.makeText(
-                this,
-                "Password management is not connected yet.",
-                Toast.LENGTH_LONG
-            ).show()
-        })
+        page.addView(
+            createSettingsCard(
+                "Change Password",
+                "Manage your account password."
+            ) {
+                Toast.makeText(
+                    this,
+                    "Password management is not connected yet.",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        )
 
         // Application information.
-        page.addView(createSettingsCard(
-            "About Splash & Dash",
-            "Application information."
-        ) {
-            showAbout()
-        })
+        page.addView(
+            createSettingsCard(
+                "About Splash & Dash",
+                "Application information."
+            ) {
+                showAbout()
+            }
+        )
 
         page.addView(sectionTitle("Appearance"))
 
@@ -116,6 +122,7 @@ class SettingsActivity : BaseActivity() {
 
         page.addView(sectionTitle("Preferences"))
 
+        // Reset saved app preferences.
         page.addView(
             primaryButton("Reset Preferences").apply {
                 setOnClickListener {
@@ -151,14 +158,14 @@ class SettingsActivity : BaseActivity() {
 
         val titleView = text(
             title,
-            17,
+            17f,
             true,
             textColor
         )
 
         val descriptionView = text(
             description,
-            13,
+            13f,
             false,
             muted
         )
@@ -176,15 +183,12 @@ class SettingsActivity : BaseActivity() {
     // Displays application information.
     private fun showAbout() {
 
-        android.app.AlertDialog.Builder(this)
-            .setTitle("About Splash & Dash")
-            .setMessage(
-                "Splash & Dash Car Wash\n\n" +
-                        "Version 1.0\n\n" +
-                        "Manage your car wash bookings and services."
-            )
-            .setPositiveButton("Close", null)
-            .show()
+        showAppMessage(
+            "Splash & Dash Car Wash\n\n" +
+                    "Version 1.0\n\n" +
+                    "Manage your car wash bookings and services.",
+            "About Splash & Dash"
+        )
     }
 
     // Resets the saved app preferences.

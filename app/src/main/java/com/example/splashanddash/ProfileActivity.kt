@@ -2,7 +2,7 @@
 package com.example.splashanddash
 
 import android.os.Bundle
-import android.view.View
+import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -18,7 +18,7 @@ class ProfileActivity : BaseActivity() {
 
     private lateinit var addressInput: EditText
     private lateinit var profileMessage: TextView
-    private lateinit var saveButton: android.widget.Button
+    private lateinit var saveButton: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -33,15 +33,18 @@ class ProfileActivity : BaseActivity() {
 
         val root = createScreen()
 
+        // Add the shared navigation bar.
         root.addView(navBar())
 
         val scroll = content()
         val page = column(20)
 
-        page.addView(pageHeader(
-            "My Profile",
-            "View and update your customer information."
-        ))
+        page.addView(
+            pageHeader(
+                "My Profile",
+                "View and update your customer information."
+            )
+        )
 
         page.addView(sectionTitle("Customer Profile"))
 
@@ -50,7 +53,7 @@ class ProfileActivity : BaseActivity() {
         profileCard.addView(
             text(
                 "Your account information",
-                14,
+                14f,
                 false,
                 muted
             )
@@ -86,30 +89,31 @@ class ProfileActivity : BaseActivity() {
         addressCard.addView(
             text(
                 "Update your saved home address below.",
-                13,
+                13f,
                 false,
                 muted
             )
         )
 
         // Only the home address can be edited.
-        addressInput = input("Enter your home address")
-
-        addressInput.minLines = 2
-        addressInput.maxLines = 4
-        addressInput.setSingleLine(false)
+        addressInput = input("Enter your home address").apply {
+            minLines = 2
+            maxLines = 4
+            setSingleLine(false)
+        }
 
         addressCard.addView(addressInput)
 
         profileMessage = text(
             "",
-            13,
+            13f,
             false,
             muted
         )
 
         addressCard.addView(profileMessage)
 
+        // Disable saving until the profile has loaded.
         saveButton = primaryButton("Save Changes").apply {
             isEnabled = false
 
@@ -152,7 +156,7 @@ class ProfileActivity : BaseActivity() {
         field.addView(
             text(
                 label,
-                11,
+                11f,
                 true,
                 muted
             )
@@ -160,7 +164,7 @@ class ProfileActivity : BaseActivity() {
 
         val value = text(
             "Loading...",
-            15,
+            15f,
             false,
             textColor
         )
@@ -201,6 +205,8 @@ class ProfileActivity : BaseActivity() {
                     error.message ?: "Unable to load your profile."
 
                 profileMessage.setTextColor(danger)
+
+                saveButton.isEnabled = false
             }
         }
     }
@@ -211,12 +217,12 @@ class ProfileActivity : BaseActivity() {
         val newAddress = addressInput.text.toString().trim()
 
         if (newAddress.isBlank()) {
-
             addressInput.error = "Please enter your home address."
             return
         }
 
         saveButton.isEnabled = false
+
         profileMessage.text = "Saving address..."
         profileMessage.setTextColor(muted)
 

@@ -202,6 +202,9 @@ The public website can be accessed normally. To access the staff and administrat
 
 Customer registration, login and booking functionality are accessed through the Android application.
 
+Or,
+https://splash-dash-mine.onrender.com 
+
 ### 6.2 Android Application
 
 1. Clone or download the project repository.

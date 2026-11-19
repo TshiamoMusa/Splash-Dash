@@ -99,21 +99,26 @@ The system supports four account types, each with different responsibilities and
 - Access the hidden website login panel.
 - Manage customers.
 - Manage bookings.
-- Manage staff accounts.
+- Create and manage Staff accounts only.
 - Monitor business operations.
 - Access administrative reports.
+- Cannot create, promote or manage Super Admin or other normal Admin accounts.
+- Cannot deactivate accounts.
 
 **Super Admin**
 
 - Access the hidden website login panel.
-- Has additional administrative privileges.
+- Has the highest level of administrative privileges.
 - Can create Super Admin, normal Admin and Staff accounts.
-- Can manage administrative accounts, including other Super Admin accounts.
+- Can promote an existing normal Admin to Super Admin.
+- Can manage all administrative accounts, including other Super Admin accounts.
+- Is the only account type authorised to deactivate accounts.
+- Is the only account type authorised to promote another account to Super Admin.
 - Is subject to the system's maximum limit of three Super Admin accounts.
 
 The distinction between Super Admin and normal Admin is important. Although both use the Admin role for API authentication, the system uses an additional Super Admin indicator to determine their permissions.
 
-Normal Admin accounts cannot create or manage Super Admin accounts.
+Normal Admin accounts can create and manage Staff accounts only. They cannot create or manage normal Admin or Super Admin accounts.
 
 The existing account structure allows for a maximum of three Super Admin accounts, while normal Admin and Staff accounts are not subject to this limit.
 
@@ -244,12 +249,15 @@ The following functionality should be tested across the system.
 
 - Logging in as a normal Admin.
 - Logging in as a Super Admin.
-- Creating staff and administrator accounts.
+- Creating staff accounts as a normal Admin.
+- Creating Super Admin, normal Admin and Staff accounts as a Super Admin.
+- Verifying that normal Admins cannot create or manage other Admin or Super Admin accounts.
+- Verifying that only Super Admins can deactivate accounts.
+- Verifying that only Super Admins can promote an existing normal Admin to Super Admin.
 - Managing customer accounts.
 - Managing bookings.
 - Managing staff accounts.
 - Viewing reports.
-- Verifying that normal Admins cannot manage Super Admin accounts.
 - Verifying the maximum limit of three Super Admin accounts.
 
 ### 7.4 Integration Testing
@@ -314,3 +322,22 @@ By combining an informational website and an Android application with a shared b
 At the same time, staff and administrators can use the website's restricted portals to manage bookings, monitor service progress and oversee daily business operations.
 
 The project demonstrates the application of software development concepts, database management, API integration, authentication, role-based access control and cross-platform application development in a practical business environment.
+
+## 12. Test Account Credentials
+
+Use the following test accounts to access the different administrative account types and verify their permissions.
+
+### Super Admin
+
+- Username/email: `admin01`
+- Password: `Test_@dmin01`
+
+### Normal Admin
+
+- Username/email: `admin03`
+- Password: `Test_@dmin03`
+
+### Staff
+
+- Username/email: `kabelo_staff`
+- Password: `StaffPass2026!`
